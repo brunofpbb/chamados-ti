@@ -5,7 +5,7 @@ async function get(path){
  const r=await fetch(base+path,{headers:process.env.ALTERDATA_PROXY_KEY?{'X-Proxy-Key':process.env.ALTERDATA_PROXY_KEY}:{},signal:AbortSignal.timeout(12000)});
  if(!r.ok)throw Error('Alterdata indisponível ('+r.status+')');return r.json();
 }
-const companies=async()=>{const v=await get('/empresas');if(!Array.isArray(v))throw Error('Empresas inválidas');return v.map(x=>({code:String(x.codigo_empresa??x.codigo??''),name:String(x.razao_social??x.nome_fantasia??x.nome??x.descricao??x.codigo_empresa)})).filter(x=>x.code);};
+const companies=async()=>{const v=await get('/empresas');if(!Array.isArray(v))throw Error('Empresas inválidas');return v.map(x=>({code:String(x.codigo_empresa??x.codigo??''),name:String(x.fantasia??x.razao_social??x.nome_fantasia??x.nome??x.descricao??x.codigo_empresa)})).filter(x=>x.code);};
 const employees=async(company,term='',situacao='ativos')=>{const v=await get('/empresas/'+encodeURIComponent(company)+'/funcionarios?'+new URLSearchParams({busca:term,situacao}));if(!Array.isArray(v))throw Error('Funcionários inválidos');return v;};
 function normalize(e){
  const id=e.idfuncionario??e.idFuncionario??e.funcionario_id??e.id;
