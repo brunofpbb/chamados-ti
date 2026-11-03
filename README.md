@@ -33,7 +33,7 @@ Os campos usados são `codigo_empresa`, `idfuncionario`, `nome` e indicador de d
 5. Promova **apenas sua conta** a administrador, no banco recém-criado (troque o e-mail):
 
 ```sql
-UPDATE users SET role='ADMIN' WHERE lower(email)=lower('seu-email@turintransportes.com.br') AND enabled=true;
+UPDATE usuarios SET role='ADMIN' WHERE lower(email)=lower('seu-email@turintransportes.com.br') AND enabled=true;
 ```
 
 Esse passo é manual para impedir que um usuário se torne administrador por meio de parâmetros públicos. Depois, o menu "Convidar analista" fica disponível.
@@ -52,3 +52,7 @@ Crie um projeto/serviço novo, separado dos existentes, vincule o código a um r
 6. **Testar:** acesso cruzado entre funcionários, revogação por desligamento e envio de e-mail nas mudanças de status/respostas.
 
 **Observação:** o sistema é um MVP funcional em código, não uma aplicação que já tenha sido publicada ou testada com as credenciais/infraestrutura reais.
+
+## Nomenclatura das tabelas
+
+As tabelas PostgreSQL foram padronizadas em português: `usuarios`, `tokens_acesso`, `chamados`, `interacoes` e `anexos`. A migração é executada automaticamente na inicialização e renomeia as tabelas existentes, preservando os dados e as chaves estrangeiras. As colunas e os endpoints da API mantêm seus nomes originais, para evitar incompatibilidade com o frontend.
