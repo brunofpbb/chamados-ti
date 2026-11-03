@@ -17,7 +17,8 @@ function normalize(e){
  // Falha fechada: não apresentar um funcionário se não houver confirmação da situação funcional.
  if(!offKnown && status===undefined)throw Error('Mapear o campo de desligamento/situação da API Alterdata');
  const ended=off!==null&&off!==undefined&&String(off).trim()!=='';
- return {id:String(id??''),name:String(name??''),active:!ended&&!inactive};
+ const officialEmail=String(e.email_corporativo??e.emailCorporativo??e.email_funcional??e.emailFuncionario??e.email??e.email_funcionario??'').trim().toLowerCase();
+ return {id:String(id??''),name:String(name??''),active:!ended&&!inactive,email:/^\S+@\S+\.\S+$/.test(officialEmail)?officialEmail:null};
 }
 async function findActive(company,id){const list=await employees(company,'');const matched=list.find(e=>normalize(e).id===String(id));if(!matched)return null;const n=normalize(matched);return n.active?n:null;}
 module.exports={companies,employees,normalize,findActive};
