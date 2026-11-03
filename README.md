@@ -71,3 +71,15 @@ As tabelas PostgreSQL foram padronizadas em português: `usuarios`, `tokens_aces
 A página de login usa a paleta verde do site Turin (principal `#005B28`), com formulário no lado esquerdo, logo oficial reutilizada do repositório `turin-sitevendas` (`img/turin-wordmark-white-64h.png`) e favicon oficial (`img/turin-fav-wide-32.png`). Os assets ficam armazenados no próprio repositório `chamados-ti`.
 
 No projeto `Analista-DP`, o arquivo `backend/src/services/alterdataClient.js` contém chamadas HTTP à API externa, não comandos SQL executados diretamente no banco Alterdata. As rotas importantes para este portal são `GET /empresas` e `GET /empresas/{codigo}/funcionarios?busca={nome}`, autenticadas por `X-Proxy-Key` quando necessário. Esse cliente também consulta folha, férias e eventos de desligamento. Os comandos SQL subjacentes pertencem à implementação do serviço da API, não foram localizados nesse cliente. Antes de cadastrar funcionários, validar os nomes reais dos campos de status/desligamento e e-mail na resposta da API.
+
+## Cadastro por CPF e login individual (novembro/2026)
+
+- No primeiro acesso, o usuário escolhe a empresa e informa o CPF. A API Alterdata é consultada com `situacao=ativos`; o CPF do retorno precisa corresponder exatamente ao digitado.
+- O funcionário informa seu e-mail de contato, independentemente do cadastro de RH. **Várias contas podem utilizar o mesmo e-mail.**
+- O sistema gera um login individual a partir do primeiro e último nome (ex.: `joao.silva`). Quando já existe, acrescenta um número (ex.: `joao.silva.2`).
+- O e-mail recebe um link de uso único, válido por 30 minutos, para confirmar o endereço e criar a senha. Ao definir a senha, o sistema autentica automaticamente a sessão.
+- Login: **login + senha**, não e-mail + senha. Recuperação: **login + e-mail**; isso evita ambiguidade em caixas postais compartilhadas.
+- Cada conta mantém empresa, `idfuncionario`, termo de busca funcional e **HMAC-SHA256 do CPF**, sem armazenar CPF em texto puro; a situação e o CPF retornados pelo Alterdata são revalidados a cada acesso autenticado.
+- Contas existentes receberam um login legado `usuario-ID`, preservando registros e senhas; podem ser migradas administrativamente para nome.sobrenome.
+
+**Risco de identidade:** conhecer o CPF e controlar o e-mail escolhido não comprova que o solicitante é o titular do vínculo. Antes da liberação ampla, implemente verificação adicional (aprovação pelo RH/TI ou outro fator previamente vinculado ao funcionário), sobretudo quando o e-mail é compartilhado. Até lá, trate o primeiro acesso como piloto supervisionado. A confirmação do link demonstra controle da caixa de e-mail, não da identidade funcional.
