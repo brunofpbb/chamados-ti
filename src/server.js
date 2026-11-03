@@ -13,14 +13,14 @@ const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
 const cpfHash=cpf=>crypto.createHmac('sha256',secret).update(String(cpf||'').replace(/\D/g,'')).digest('hex');
 const loginBase=name=>{const words=String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().match(/[a-z0-9]+/g)||[];return [words[0],words.length>1?words[words.length-1]:''].filter(Boolean).join('.')||'colaborador';};
 async function allocateLogin(db,name){const base=loginBase(name);for(let i=0;i<10000;i++){const login=i?base+'.'+(i+1):base;const r=await db.query('SELECT 1 FROM usuarios WHERE login=$1',[login]);if(!r.rowCount)return login;}throw Error('Não foi possível gerar um login único');}
-async function checkEmployee(u){return alter.findActive(u.company_code,u.employee_id,u.employee_lookup||u.name,u.cpf_hash,cpfHash);}
+async function checkEmployee(u){if(u.is_test){return u.test_expires_at&&new Date(u.test_expires_at).getTime()>Date.now()?{name:u.name,active:true}:null;}return alter.findActive(u.company_code,u.employee_id,u.employee_lookup||u.name,u.cpf_hash,cpfHash);}
 
 const sign=s=>crypto.createHmac('sha256',secret).update(s).digest('base64url');
 const session=u=>{const v=Buffer.from(JSON.stringify({id:u.id,exp:Date.now()+8*3600000})).toString('base64url');return v+'.'+sign(v);};
 function setCookie(res,u){res.cookie('turin_ti',session(u),{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',maxAge:8*3600000,path:'/'});}
 // Origin check for state-changing operations and cookies; same-site POSTs are not enough alone.
 app.use('/api',(req,res,next)=>{if(!['GET','HEAD','OPTIONS'].includes(req.method)){const origin=req.get('origin');if(origin&&origin!==new URL(publicUrl).origin)return res.status(403).json({erro:'Origem não permitida'});}next();});
-async function auth(req,res,next){try{const raw=req.cookies.turin_ti||'',split=raw.split('.');if(split.length!==2||split[1].length!==sign(split[0]).length||!crypto.timingSafeEqual(Buffer.from(sign(split[0])),Buffer.from(split[1])))return res.status(401).json({erro:'Entre novamente'});const payload=JSON.parse(Buffer.from(split[0],'base64url').toString());if(Date.now()>payload.exp)return res.status(401).json({erro:'Sessão expirada'});const q=await pool.query('SELECT id,name,login,email,company_code,employee_id,employee_lookup,cpf_hash,role,enabled FROM usuarios WHERE id=$1',[payload.id]);const u=q.rows[0];if(!u?.enabled)return res.status(401).json({erro:'Usuário inativo'});
+async function auth(req,res,next){try{const raw=req.cookies.turin_ti||'',split=raw.split('.');if(split.length!==2||split[1].length!==sign(split[0]).length||!crypto.timingSafeEqual(Buffer.from(sign(split[0])),Buffer.from(split[1])))return res.status(401).json({erro:'Entre novamente'});const payload=JSON.parse(Buffer.from(split[0],'base64url').toString());if(Date.now()>payload.exp)return res.status(401).json({erro:'Sessão expirada'});const q=await pool.query('SELECT id,name,login,email,company_code,employee_id,employee_lookup,cpf_hash,role,enabled,is_test,test_expires_at FROM usuarios WHERE id=$1',[payload.id]);const u=q.rows[0];if(!u?.enabled)return res.status(401).json({erro:'Usuário inativo'});
  // TODOS os perfis vinculados ao Alterdata; impedir acesso mesmo com sessão existente.
  const current=await checkEmployee(u);
  if(!current)return res.status(403).json({erro:'Funcionário desligado ou não localizado no Alterdata'});
@@ -71,7 +71,7 @@ app.post('/api/public/reset',throttle,safe(async(req,res)=>{
 app.post('/api/public/set-password',throttle,safe(async(req,res)=>{
  const raw=String(req.body?.token||''),password=String(req.body?.password||'');
  if(password.length<10||password.length>128)return res.status(400).json({erro:'Senha deve ter de 10 a 128 caracteres'});
- const q=await pool.query('SELECT t.*,u.company_code,u.employee_id,u.employee_lookup,u.name,u.cpf_hash,u.enabled,u.login FROM tokens_acesso t JOIN usuarios u ON u.id=t.user_id WHERE t.token_hash=$1 AND t.used_at IS NULL AND t.expires_at>now()',[sha(raw)]);
+ const q=await pool.query('SELECT t.*,u.company_code,u.employee_id,u.employee_lookup,u.name,u.cpf_hash,u.enabled,u.login,u.is_test,u.test_expires_at FROM tokens_acesso t JOIN usuarios u ON u.id=t.user_id WHERE t.token_hash=$1 AND t.used_at IS NULL AND t.expires_at>now()',[sha(raw)]);
  const t=q.rows[0];if(!t?.enabled)return res.status(400).json({erro:'Link inválido ou expirado'});
  if(!await checkEmployee(t))return res.status(403).json({erro:'Funcionário desligado ou vínculo indisponível'});
  const client=await pool.connect();try{await client.query('BEGIN');
@@ -104,6 +104,54 @@ app.post('/api/tickets/:id/interaction',auth,ticketAccess,upload.array('files',5
 app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{const t=req.ticket;const isManager=req.user.role!=='COLABORADOR';const status=String(req.body?.status||t.status);const assignee=req.body?.assigneeId===null?null:req.body?.assigneeId===undefined?t.assignee_id:Number(req.body.assigneeId);if(!statuses.includes(status))return res.status(400).json({erro:'Status inválido'});if(!isManager&&(status!=='CANCELADO'||!['ABERTO','EM_ATENDIMENTO','AGUARDANDO_USUARIO'].includes(t.status)))return res.status(403).json({erro:'Só é permitido cancelar chamado em andamento'});if(t.status==='CANCELADO'||t.status==='RESOLVIDO')return res.status(409).json({erro:'Chamado encerrado'});if(isManager&&assignee!==null){const q=await pool.query("SELECT id FROM usuarios WHERE id=$1 AND role IN ('ANALISTA','ADMIN') AND enabled=true",[assignee]);if(!q.rowCount)return res.status(400).json({erro:'Analista inválido'});}const client=await pool.connect();try{await client.query('BEGIN');await client.query('UPDATE chamados SET status=$1,assignee_id=$2,updated_at=now(),resolved_at=CASE WHEN $1=\'RESOLVIDO\' THEN now() ELSE NULL END WHERE id=$3',[status,isManager?assignee:t.assignee_id,t.id]);await client.query('INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,$3,$4)',[t.id,req.user.id,'ALTERACAO',`Status: ${t.status} → ${status}; responsável: ${isManager?assignee??'não atribuído':t.assignee_id??'não atribuído'}`]);await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}const q=await pool.query('SELECT email FROM usuarios WHERE id=$1',[t.requester_id]);send(q.rows[0].email,'Atualização do chamado #'+t.id,`<p>Seu chamado foi atualizado.</p><p>Status: <b>${esc(status)}</b></p>`).catch(console.error);res.json({ok:true});}));
 app.get('/api/analysts',auth,manager,safe(async(req,res)=>{const q=await pool.query("SELECT id,name,company_code,email,role FROM usuarios WHERE role IN ('ANALISTA','ADMIN') AND enabled=true ORDER BY name");res.json(q.rows);}));
 app.get('/api/dashboard',auth,manager,safe(async(req,res)=>{const q=await pool.query("SELECT status,count(*)::int AS total FROM chamados GROUP BY status");const daily=await pool.query("SELECT to_char(date_trunc('day',created_at AT TIME ZONE 'America/Sao_Paulo'),'DD/MM') AS dia,count(*)::int AS total FROM chamados WHERE created_at>=now()-interval '14 days' GROUP BY 1,date_trunc('day',created_at AT TIME ZONE 'America/Sao_Paulo') ORDER BY 2");const unit=await pool.query('SELECT company_code,count(*)::int total FROM chamados GROUP BY company_code ORDER BY total DESC');const avg=await pool.query("SELECT ROUND(AVG(EXTRACT(EPOCH FROM (resolved_at-created_at))/3600)::numeric,1) AS hours FROM chamados WHERE resolved_at IS NOT NULL");res.json({statuses:q.rows,daily:daily.rows,units:unit.rows,meanResolutionHours:avg.rows[0].hours});}));
+
+/* Administração: usuários vinculados ao RH e contas temporárias de teste.
+   Nunca existe cadastro público ou senha padrão de administrador. */
+app.get('/api/admin/users',auth,admin,safe(async(req,res)=>{
+ const r=await pool.query("SELECT id,login,name,email,company_code,role,enabled,is_test,test_expires_at,created_at,(passhash IS NOT NULL) AS activated FROM usuarios ORDER BY name,id");
+ res.json(r.rows);
+}));
+app.patch('/api/admin/users/:id',auth,admin,safe(async(req,res)=>{
+ const id=Number(req.params.id),role=String(req.body?.role||''),enabled=req.body?.enabled;
+ if(!Number.isSafeInteger(id)||id<1||!['ADMIN','ANALISTA','COLABORADOR'].includes(role)||typeof enabled!=='boolean')return res.status(400).json({erro:'Dados inválidos'});
+ if(Number(req.user.id)===id && (!enabled||role!=='ADMIN'))return res.status(409).json({erro:'Não é permitido desativar ou rebaixar sua própria conta'});
+ const client=await pool.connect();try{
+  await client.query('BEGIN');
+  const target=await client.query('SELECT id,role,enabled FROM usuarios WHERE id=$1 FOR UPDATE',[id]);
+  if(!target.rowCount){await client.query('ROLLBACK');return res.status(404).json({erro:'Usuário não localizado'});}
+  if(target.rows[0].role==='ADMIN'&&(role!=='ADMIN'||!enabled)){
+    const admins=await client.query("SELECT count(*)::int AS total FROM usuarios WHERE role='ADMIN' AND enabled=true");
+    if(admins.rows[0].total<=1){await client.query('ROLLBACK');return res.status(409).json({erro:'O último administrador ativo não pode ser removido'});}
+  }
+  await client.query('UPDATE usuarios SET role=$1,enabled=$2 WHERE id=$3',[role,enabled,id]);
+  await client.query('COMMIT');
+ }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+ res.json({ok:true});
+}));
+app.post('/api/admin/test-users',auth,admin,throttle,safe(async(req,res)=>{
+ const name=String(req.body?.name||'').trim(),email=String(req.body?.email||'').trim().toLowerCase(),role=String(req.body?.role||'');
+ if(name.length<3||name.length>120||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!['ADMIN','ANALISTA'].includes(role))
+   return res.status(400).json({erro:'Informe nome, e-mail válido e perfil de teste'});
+ const client=await pool.connect();let user;
+ try{
+  await client.query('BEGIN');
+  const login=await allocateLogin(client,name);
+  const r=await client.query("INSERT INTO usuarios(company_code,employee_id,employee_lookup,name,email,role,login,is_test,test_expires_at) VALUES('TESTE',$1,$2,$3,$4,$5,$6,true,now()+interval '7 days') RETURNING id,name,email,login,role,test_expires_at",['TEST-'+crypto.randomUUID(),name,name,email,role,login]);
+  user=r.rows[0];await client.query('COMMIT');
+ }catch(e){await client.query('ROLLBACK');if(e.code==='23505')return res.status(409).json({erro:'Login em uso, tente novamente'});throw e;}finally{client.release();}
+ const token=await tokenFor(user,'CONVITE');
+ try{await send(email,'Convite de teste | Chamados TI Turin',`<p>Olá, ${esc(name)}.</p><p>Uma conta temporária de <b>${esc(role)}</b> foi criada para testes. Não utiliza dados de funcionários do Alterdata.</p><p>Login: <b>${esc(user.login)}</b></p><p><a href="${esc(link(token))}">Criar senha e entrar</a></p><p>Esta conta expira em 7 dias e pode ser desativada antecipadamente pelo administrador.</p>`);}
+ catch(e){console.error('Falha ao convidar usuário de teste',e);return res.status(503).json({erro:'Conta de teste criada, porém falhou o envio do convite. Reenvie pelo painel de usuários.'});}
+ res.status(201).json({id:user.id,login:user.login,role:user.role,expiresAt:user.test_expires_at});
+}));
+app.post('/api/admin/users/:id/invite',auth,admin,throttle,safe(async(req,res)=>{
+ const q=await pool.query('SELECT id,name,email,login,enabled,is_test,test_expires_at FROM usuarios WHERE id=$1',[req.params.id]);
+ const u=q.rows[0];if(!u?.enabled)return res.status(404).json({erro:'Usuário não encontrado ou desativado'});
+ if(u.is_test&&(!u.test_expires_at||new Date(u.test_expires_at)<=new Date()))return res.status(409).json({erro:'Conta de teste expirada'});
+ const token=await tokenFor(u,'CONVITE');
+ await send(u.email,'Convite de acesso | Chamados TI Turin',`<p>Olá, ${esc(u.name)}!</p><p>Login: <b>${esc(u.login)}</b></p><p><a href="${esc(link(token))}">Criar ou redefinir senha</a></p><p>Este convite expira em 30 minutos.</p>`);
+ res.json({ok:true});
+}));
 app.post('/api/admin/invite',auth,admin,throttle,safe(async(req,res)=>{
  const company=String(req.body?.company||''),eid=String(req.body?.employeeId||'');
  const email=String(req.body?.email||'').trim().toLowerCase();
