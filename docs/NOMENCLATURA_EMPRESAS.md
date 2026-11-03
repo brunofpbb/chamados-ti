@@ -1,0 +1,1 @@
+No Alterdata, `fantasia` identifica a unidade e `nome` é a razão social. Exibir fantasia, razão social e código para distinguir registros.
