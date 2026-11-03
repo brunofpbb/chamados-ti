@@ -23,7 +23,10 @@ function normalize(e){
 async function findActiveByCpf(company,cpf){
  const clean=String(cpf||'').replace(/\D/g,'');
  if(!/^\d{11}$/.test(clean))return null;
- const list=await employees(company,clean,'ativos');
+ // Alguns bancos armazenam CPF com pontos e traço; a busca textual da API não normaliza o campo.
+ const formatted=clean.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4');
+ let list=await employees(company,clean,'ativos');
+ if(!list.some(e=>normalize(e).cpf===clean))list=await employees(company,formatted,'ativos');
  const found=list.map(normalize).find(e=>e.active&&e.cpf===clean&&e.id&&e.name);
  return found||null;
 }
