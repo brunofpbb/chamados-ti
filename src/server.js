@@ -5,7 +5,9 @@ const app=express();app.disable('x-powered-by');app.set('trust proxy',1);app.use
 const pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_SSL==='true'?{rejectUnauthorized:true}:undefined});
 const safe=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
 const secret=process.env.SESSION_SECRET;
-if(!secret||secret.length<32)throw Error('SESSION_SECRET deve conter pelo menos 32 caracteres');
+// A chave precisa ser configurada como variável secreta no Railway, nunca no repositório.
+if(!secret||secret.length<32)throw Error('Configuração ausente: SESSION_SECRET deve conter pelo menos 32 caracteres. Defina em Railway > Serviço > Variables.');
+if(!process.env.DATABASE_URL)throw Error('Configuração ausente: DATABASE_URL. Adicione um PostgreSQL ao projeto e vincule a variável DATABASE_URL ao serviço chamados-ti.');
 const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
 const sign=s=>crypto.createHmac('sha256',secret).update(s).digest('base64url');
 const session=u=>{const v=Buffer.from(JSON.stringify({id:u.id,exp:Date.now()+8*3600000})).toString('base64url');return v+'.'+sign(v);};
