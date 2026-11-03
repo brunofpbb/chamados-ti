@@ -28,6 +28,19 @@ CREATE TABLE IF NOT EXISTS usuarios (
  enabled BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  UNIQUE(company_code,employee_id)
 );
+-- Cadastro: login individual; CPF armazenado como HMAC irreversível.
+-- O e-mail pertence ao contato, não à identidade única.
+ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS users_email_key;
+ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_email_key;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS login TEXT;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cpf_hash TEXT;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS employee_lookup TEXT;
+-- Contas legadas recebem um login único e continuam com a mesma senha.
+UPDATE usuarios SET login='usuario-'||id WHERE login IS NULL OR login='';
+UPDATE usuarios SET employee_lookup=name WHERE employee_lookup IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_usuarios_login ON usuarios(login);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_usuarios_empresa_cpf ON usuarios(company_code,cpf_hash) WHERE cpf_hash IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS tokens_acesso (
  id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
  token_hash TEXT NOT NULL UNIQUE, purpose TEXT NOT NULL CHECK(purpose IN ('ATIVACAO','RESET','CONVITE')),
