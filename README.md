@@ -59,9 +59,15 @@ As tabelas PostgreSQL foram padronizadas em português: `usuarios`, `tokens_aces
 
 ## Integrações e cadastro seguro
 
-- O domínio público é `https://chamados-ti-production-8b74.up.railway.app`. Configure `PUBLIC_URL` no Railway se for utilizar outro endereço.
+- O domínio público é `https://chamados.up.railway.app`. Configure `PUBLIC_URL` no Railway se for utilizar outro endereço.
 - Configure no serviço Chamados TI: `ALTERDATA_API_BASE`, `ALTERDATA_PROXY_KEY` (quando aplicável), `BREVO_API_KEY`, `BREVO_FROM_EMAIL` e `BREVO_FROM_NAME`. Use os valores autorizados pelo administrador da infraestrutura, sem publicá-los no GitHub.
 - O cadastro automático exige correspondência entre e-mail informado e e-mail confiável retornado pela API Alterdata. Sem esse dado, o funcionário solicita um convite à TI.
 - O administrador pode convidar colaboradores e analistas após verificar a identidade. O convite oferece criação da senha por link temporário enviado pelo Brevo.
 - A busca pública por nomes não disponibiliza e-mails funcionais.
 - Confirme os campos reais de desligamento e e-mail funcional retornados pelo Alterdata antes de liberar acesso em produção.
+
+## Identidade visual Turin e fonte de dados Alterdata
+
+A página de login usa a paleta verde do site Turin (principal `#005B28`), com formulário no lado esquerdo, logo oficial reutilizada do repositório `turin-sitevendas` (`img/turin-wordmark-white-64h.png`) e favicon oficial (`img/turin-fav-wide-32.png`). Os assets ficam armazenados no próprio repositório `chamados-ti`.
+
+No projeto `Analista-DP`, o arquivo `backend/src/services/alterdataClient.js` contém chamadas HTTP à API externa, não comandos SQL executados diretamente no banco Alterdata. As rotas importantes para este portal são `GET /empresas` e `GET /empresas/{codigo}/funcionarios?busca={nome}`, autenticadas por `X-Proxy-Key` quando necessário. Esse cliente também consulta folha, férias e eventos de desligamento. Os comandos SQL subjacentes pertencem à implementação do serviço da API, não foram localizados nesse cliente. Antes de cadastrar funcionários, validar os nomes reais dos campos de status/desligamento e e-mail na resposta da API.
