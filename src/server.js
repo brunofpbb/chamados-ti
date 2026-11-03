@@ -30,6 +30,15 @@ const admin=(req,res,next)=>req.user.role==='ADMIN'?next():res.status(403).json(
 const throttle=rateLimit({windowMs:15*60000,limit:15,standardHeaders:'draft-7',legacyHeaders:false});
 app.get('/api/health',safe(async(req,res)=>{await pool.query('SELECT 1');res.json({ok:true});}));
 app.get('/api/public/companies',throttle,safe(async(req,res)=>res.json(await alter.companies())));
+app.get('/api/public/identify',throttle,safe(async(req,res)=>{
+ const company=String(req.query.company||'').trim(),cpf=String(req.query.cpf||'').replace(/\D/g,'');
+ if(!/^\d{11}$/.test(cpf))return res.status(400).json({erro:'CPF inválido'});
+ const companies=await alter.companies();
+ if(!companies.some(c=>c.code===company))return res.status(400).json({erro:'Empresa inválida'});
+ const employee=await alter.findActiveByCpf(company,cpf);
+ if(!employee)return res.status(404).json({erro:'Nenhum vínculo ativo localizado'});
+ return res.json({name:employee.name,active:true});
+}));
 app.get('/api/public/employees',throttle,safe(async(req,res)=>{const company=String(req.query.company||''),term=String(req.query.term||'').trim();if(!company||term.length<3)return res.json([]);const companies=await alter.companies();if(!companies.some(c=>c.code===company))return res.status(400).json({erro:'Empresa inválida'});const list=await alter.employees(company,term);res.json(list.map(alter.normalize).filter(e=>e.active&&e.name.toLocaleLowerCase('pt-BR').includes(term.toLocaleLowerCase('pt-BR'))).slice(0,20).map(e=>({id:e.id,name:e.name})));}));
 async function tokenFor(user,purpose){const raw=crypto.randomBytes(32).toString('base64url');await pool.query('INSERT INTO tokens_acesso(user_id,token_hash,purpose,expires_at) VALUES($1,$2,$3,now()+interval \'30 minutes\')',[user.id,sha(raw),purpose]);return raw;}
 const link=(token)=>new URL('/?token='+encodeURIComponent(token),publicUrl).toString();
@@ -101,7 +110,7 @@ app.post('/api/admin/invite',auth,admin,throttle,safe(async(req,res)=>{
  const role=String(req.body?.role||'ANALISTA');
  if(!['ANALISTA','COLABORADOR'].includes(role))return res.status(400).json({erro:'Perfil inválido'});
  if(!/^\S+@\S+\.\S+$/.test(email)||email.length>254)return res.status(400).json({erro:'E-mail inválido'});
- const employee=await alter.findActive(company,eid);
+ const employee=await alter.findActive(company,eid,String(req.body?.employeeName||'').trim());
  if(!employee)return res.status(400).json({erro:'Funcionário ativo não localizado'});
  const existing=await pool.query('SELECT id,email,role FROM usuarios WHERE company_code=$1 AND employee_id=$2',[company,eid]);
  if(existing.rowCount){
