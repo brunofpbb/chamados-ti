@@ -35,6 +35,10 @@ ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_email_key;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS login TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cpf_hash TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS employee_lookup TEXT;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS test_expires_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_usuarios_role_enabled ON usuarios(role,enabled);
+
 -- Contas legadas recebem um login único e continuam com a mesma senha.
 UPDATE usuarios SET login='usuario-'||id WHERE login IS NULL OR login='';
 UPDATE usuarios SET employee_lookup=name WHERE employee_lookup IS NULL;
