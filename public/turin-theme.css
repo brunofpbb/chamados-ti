@@ -1,0 +1,26 @@
+/* Identidade Turin: verde oficial do site de vendas e login à esquerda. */
+:root{--turin-green:#005b28;--turin-green-hover:#00743a;--turin-dark:#003d1d}
+.auth-page{display:grid;grid-template-columns:minmax(380px,42%) minmax(0,1fr);min-height:100vh;background:var(--turin-dark)}
+.auth-right{grid-column:1;grid-row:1;background:#f7faf8;display:flex;align-items:center;justify-content:center;padding:48px clamp(32px,5vw,94px)}
+.auth-left{grid-column:2;grid-row:1;background:linear-gradient(135deg,#003d1d,#005b28 60%,#06783b);color:#fff;padding:clamp(45px,7vw,130px);position:relative;overflow:hidden}
+.auth-left:after{content:"";position:absolute;width:640px;height:640px;border:85px solid rgba(255,255,255,.05);border-radius:50%;right:-220px;bottom:-270px;pointer-events:none}
+.auth-left h1{font-size:clamp(36px,3.5vw,62px);max-width:720px;line-height:1.14}
+.auth-left p{color:#e0efe5}
+.auth-left .brand{padding:0;margin-bottom:30px}
+.brand-image{display:block;width:160px;height:auto;object-fit:contain}
+.auth-left .brand-image{width:215px}
+.sidebar .brand-image{width:165px}
+.auth-box{width:100%;max-width:420px}
+.auth-logo{color:var(--turin-green)}
+.auth-logo small{color:#397a51}
+.auth-box h2{color:#173326}
+button.primary{background:var(--turin-green);border-color:var(--turin-green)}
+button.primary:hover{background:var(--turin-green-hover);border-color:var(--turin-green-hover)}
+.auth-links a,a{color:var(--turin-green)}
+.sidebar{background:linear-gradient(165deg,#005b28,#003d1d)}
+.brand-mark{color:var(--turin-green)}
+.eyebrow{color:var(--turin-green-hover)}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--turin-green-hover);box-shadow:0 0 0 3px #00743a22}
+.bar-fill{background:var(--turin-green-hover)}
+@media(max-width:1000px){.auth-page{grid-template-columns:minmax(360px,44%) minmax(0,1fr)}.auth-left{padding:50px}.auth-right{padding:35px}}
+@media(max-width:760px){.auth-page{display:flex;flex-direction:column}.auth-left{order:0;padding:26px 23px}.auth-left .brand{margin-bottom:12px}.auth-left .brand-image{width:145px}.auth-left h1{font-size:27px;margin-bottom:0}.auth-left p{display:none}.auth-right{order:1;min-height:0;flex:1;padding:30px 23px 45px}.auth-logo{margin-bottom:25px}}
