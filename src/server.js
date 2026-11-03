@@ -10,14 +10,19 @@ const secret=process.env.SESSION_SECRET;
 if(!secret||secret.length<32)throw Error('Configuração ausente: SESSION_SECRET deve conter pelo menos 32 caracteres. Defina em Railway > Serviço > Variables.');
 if(!process.env.DATABASE_URL)throw Error('Configuração ausente: DATABASE_URL. Adicione um PostgreSQL ao projeto e vincule a variável DATABASE_URL ao serviço chamados-ti.');
 const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
+const cpfHash=cpf=>crypto.createHmac('sha256',secret).update(String(cpf||'').replace(/\D/g,'')).digest('hex');
+const loginBase=name=>{const words=String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().match(/[a-z0-9]+/g)||[];return [words[0],words.length>1?words[words.length-1]:''].filter(Boolean).join('.')||'colaborador';};
+async function allocateLogin(db,name){const base=loginBase(name);for(let i=0;i<10000;i++){const login=i?base+'.'+(i+1):base;const r=await db.query('SELECT 1 FROM usuarios WHERE login=$1',[login]);if(!r.rowCount)return login;}throw Error('Não foi possível gerar um login único');}
+async function checkEmployee(u){return alter.findActive(u.company_code,u.employee_id,u.employee_lookup||u.name,u.cpf_hash,cpfHash);}
+
 const sign=s=>crypto.createHmac('sha256',secret).update(s).digest('base64url');
 const session=u=>{const v=Buffer.from(JSON.stringify({id:u.id,exp:Date.now()+8*3600000})).toString('base64url');return v+'.'+sign(v);};
 function setCookie(res,u){res.cookie('turin_ti',session(u),{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',maxAge:8*3600000,path:'/'});}
 // Origin check for state-changing operations and cookies; same-site POSTs are not enough alone.
 app.use('/api',(req,res,next)=>{if(!['GET','HEAD','OPTIONS'].includes(req.method)){const origin=req.get('origin');if(origin&&origin!==new URL(publicUrl).origin)return res.status(403).json({erro:'Origem não permitida'});}next();});
-async function auth(req,res,next){try{const raw=req.cookies.turin_ti||'',split=raw.split('.');if(split.length!==2||split[1].length!==sign(split[0]).length||!crypto.timingSafeEqual(Buffer.from(sign(split[0])),Buffer.from(split[1])))return res.status(401).json({erro:'Entre novamente'});const payload=JSON.parse(Buffer.from(split[0],'base64url').toString());if(Date.now()>payload.exp)return res.status(401).json({erro:'Sessão expirada'});const q=await pool.query('SELECT id,name,email,company_code,employee_id,role,enabled FROM usuarios WHERE id=$1',[payload.id]);const u=q.rows[0];if(!u?.enabled)return res.status(401).json({erro:'Usuário inativo'});
+async function auth(req,res,next){try{const raw=req.cookies.turin_ti||'',split=raw.split('.');if(split.length!==2||split[1].length!==sign(split[0]).length||!crypto.timingSafeEqual(Buffer.from(sign(split[0])),Buffer.from(split[1])))return res.status(401).json({erro:'Entre novamente'});const payload=JSON.parse(Buffer.from(split[0],'base64url').toString());if(Date.now()>payload.exp)return res.status(401).json({erro:'Sessão expirada'});const q=await pool.query('SELECT id,name,login,email,company_code,employee_id,employee_lookup,cpf_hash,role,enabled FROM usuarios WHERE id=$1',[payload.id]);const u=q.rows[0];if(!u?.enabled)return res.status(401).json({erro:'Usuário inativo'});
  // TODOS os perfis vinculados ao Alterdata; impedir acesso mesmo com sessão existente.
- const current=await alter.findActive(u.company_code,u.employee_id);
+ const current=await checkEmployee(u);
  if(!current)return res.status(403).json({erro:'Funcionário desligado ou não localizado no Alterdata'});
  req.user=u;next();}catch(e){next(e);}}
 const manager=(req,res,next)=>['ANALISTA','ADMIN'].includes(req.user.role)?next():res.status(403).json({erro:'Acesso restrito à equipe de TI'});
@@ -28,17 +33,53 @@ app.get('/api/public/companies',throttle,safe(async(req,res)=>res.json(await alt
 app.get('/api/public/employees',throttle,safe(async(req,res)=>{const company=String(req.query.company||''),term=String(req.query.term||'').trim();if(!company||term.length<3)return res.json([]);const companies=await alter.companies();if(!companies.some(c=>c.code===company))return res.status(400).json({erro:'Empresa inválida'});const list=await alter.employees(company,term);res.json(list.map(alter.normalize).filter(e=>e.active&&e.name.toLocaleLowerCase('pt-BR').includes(term.toLocaleLowerCase('pt-BR'))).slice(0,20).map(e=>({id:e.id,name:e.name})));}));
 async function tokenFor(user,purpose){const raw=crypto.randomBytes(32).toString('base64url');await pool.query('INSERT INTO tokens_acesso(user_id,token_hash,purpose,expires_at) VALUES($1,$2,$3,now()+interval \'30 minutes\')',[user.id,sha(raw),purpose]);return raw;}
 const link=(token)=>new URL('/?token='+encodeURIComponent(token),publicUrl).toString();
-app.post('/api/public/register',throttle,safe(async(req,res)=>{const {company,employeeId,email}=req.body||{};const mail=String(email||'').trim().toLowerCase();if(!/^\S+@\S+\.\S+$/.test(mail)||mail.length>254)return res.status(400).json({erro:'E-mail inválido'});const c=String(company||''),eid=String(employeeId||'');const active=await alter.findActive(c,eid);if(!active)return res.status(400).json({erro:'Funcionário ativo não localizado'});
- // A seleção de um nome não comprova identidade. O e-mail deve ser confirmado pela fonte de RH.
- // Sem e-mail cadastrado, o atendimento de TI pode convidar a pessoa após conferência documental.
- if(!active.email||active.email!==mail)return res.status(403).json({erro:'E-mail não corresponde ao cadastro funcional do Alterdata ou não consta nele. Solicite ao TI um convite após validação de identidade.'});
- const existing=await pool.query('SELECT id,email,role FROM usuarios WHERE company_code=$1 AND employee_id=$2',[c,eid]);if(existing.rowCount)return res.status(409).json({erro:'Cadastro já existente. Use esqueci minha senha.'});
- const conflict=await pool.query('SELECT 1 FROM usuarios WHERE email=$1',[mail]);if(conflict.rowCount)return res.status(409).json({erro:'E-mail já cadastrado'});
- const client=await pool.connect();let user;try{await client.query('BEGIN');const u=await client.query("INSERT INTO usuarios(company_code,employee_id,name,email,role) VALUES($1,$2,$3,$4,'COLABORADOR') RETURNING id,email",[c,eid,active.name,mail]);user=u.rows[0];await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
- const code=await tokenFor(user,'ATIVACAO');try{await send(mail,'Ative sua conta | Chamados TI Turin',`<p>Olá, ${esc(active.name)}!</p><p>Para criar sua senha, acesse o link (válido por 30 minutos):</p><p><a href="${esc(link(code))}">Criar senha</a></p><p>Se não foi você, ignore.</p>`);}catch(e){console.error('Falha ao enviar ativação',e);return res.status(503).json({erro:'Cadastro realizado, mas não foi possível enviar o e-mail. Use recuperar senha.'});}res.json({ok:true,mensagem:'Enviamos um link de ativação ao e-mail informado.'});}));
-app.post('/api/public/reset',throttle,safe(async(req,res)=>{const email=String(req.body?.email||'').trim().toLowerCase();const q=await pool.query('SELECT * FROM usuarios WHERE email=$1 AND enabled=true',[email]);if(q.rowCount){const u=q.rows[0];const active=await alter.findActive(u.company_code,u.employee_id);if(active){const code=await tokenFor(u,'RESET');await send(email,'Redefinição de senha | Chamados TI Turin',`<p>Use este link por 30 minutos:</p><a href="${esc(link(code))}">Redefinir senha</a>`);}}res.json({ok:true,mensagem:'Se o cadastro estiver ativo, enviaremos um link.'});}));
-app.post('/api/public/set-password',throttle,safe(async(req,res)=>{const raw=String(req.body?.token||''),password=String(req.body?.password||'');if(password.length<10||password.length>128)return res.status(400).json({erro:'Senha deve ter de 10 a 128 caracteres'});const q=await pool.query('SELECT t.*,u.company_code,u.employee_id,u.enabled FROM tokens_acesso t JOIN usuarios u ON u.id=t.user_id WHERE t.token_hash=$1 AND t.used_at IS NULL AND t.expires_at>now()',[sha(raw)]);const t=q.rows[0];if(!t?.enabled)return res.status(400).json({erro:'Link inválido ou expirado'});if(!await alter.findActive(t.company_code,t.employee_id))return res.status(403).json({erro:'Funcionário não está ativo'});const client=await pool.connect();try{await client.query('BEGIN');const updated=await client.query('UPDATE tokens_acesso SET used_at=now() WHERE id=$1 AND used_at IS NULL RETURNING id',[t.id]);if(!updated.rowCount)throw Error('Link já utilizado');await client.query('UPDATE usuarios SET passhash=$1 WHERE id=$2',[await bcrypt.hash(password,12),t.user_id]);await client.query('UPDATE tokens_acesso SET used_at=now() WHERE user_id=$1 AND used_at IS NULL',[t.user_id]);await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}res.json({ok:true});}));
-app.post('/api/public/login',throttle,safe(async(req,res)=>{const email=String(req.body?.email||'').trim().toLowerCase(),password=String(req.body?.password||'');const q=await pool.query('SELECT * FROM usuarios WHERE email=$1 AND enabled=true',[email]);const u=q.rows[0];if(!u?.passhash||!await bcrypt.compare(password,u.passhash))return res.status(401).json({erro:'E-mail ou senha incorretos'});if(!await alter.findActive(u.company_code,u.employee_id))return res.status(403).json({erro:'Funcionário desligado ou cadastro funcional indisponível'});setCookie(res,u);res.json({id:u.id,name:u.name,role:u.role});}));
+app.post('/api/public/register',throttle,safe(async(req,res)=>{
+ const company=String(req.body?.company||'').trim(),cpf=String(req.body?.cpf||'').replace(/\D/g,''),email=String(req.body?.email||'').trim().toLowerCase();
+ if(!/^\d{11}$/.test(cpf))return res.status(400).json({erro:'Informe um CPF com 11 dígitos'});
+ if(!/^\S+@\S+\.\S+$/.test(email)||email.length>254)return res.status(400).json({erro:'E-mail inválido'});
+ const companies=await alter.companies();if(!companies.some(x=>x.code===company))return res.status(400).json({erro:'Empresa inválida'});
+ const employee=await alter.findActiveByCpf(company,cpf);
+ if(!employee)return res.status(400).json({erro:'Não foi localizado vínculo ativo para o CPF e empresa informados'});
+ const existing=await pool.query('SELECT 1 FROM usuarios WHERE company_code=$1 AND (employee_id=$2 OR cpf_hash=$3)',[company,employee.id,cpfHash(cpf)]);
+ if(existing.rowCount)return res.status(409).json({erro:'Funcionário já cadastrado. Use o login existente ou recupere sua senha.'});
+ let user;
+ const client=await pool.connect();
+ try{await client.query('BEGIN');
+   const login=await allocateLogin(client,employee.name);
+   const q=await client.query("INSERT INTO usuarios(company_code,employee_id,employee_lookup,cpf_hash,login,name,email,role) VALUES($1,$2,$3,$4,$5,$6,$7,'COLABORADOR') RETURNING id,email,login",[company,employee.id,employee.lookup||employee.name,cpfHash(cpf),login,employee.name,email]);user=q.rows[0];await client.query('COMMIT');
+ }catch(e){await client.query('ROLLBACK');if(e.code==='23505')return res.status(409).json({erro:'Funcionário ou login já cadastrado. Atualize a página e tente novamente.'});throw e;}finally{client.release();}
+ const code=await tokenFor(user,'ATIVACAO');
+ try{await send(email,'Ativação de acesso | Chamados TI Turin',`<p>Olá, ${esc(employee.name)}!</p><p>Seu login: <strong>${esc(user.login)}</strong></p><p>Confirme o endereço informado e crie sua senha pelo link (válido por 30 minutos):</p><p><a href="${esc(link(code))}">Validar e-mail e criar senha</a></p><p>Se não solicitou o cadastro, ignore esta mensagem e avise a TI.</p>`);}
+ catch(e){console.error('Falha ao enviar ativação',e);return res.status(503).json({erro:'Cadastro registrado, mas envio do e-mail falhou. Solicite recuperação por login e e-mail.'});}
+ res.json({ok:true,login:user.login,mensagem:'Confira seu e-mail para confirmar o endereço e criar a senha. Seu login é '+user.login+'.'});
+}));
+app.post('/api/public/reset',throttle,safe(async(req,res)=>{
+ const login=String(req.body?.login||'').trim().toLowerCase(),email=String(req.body?.email||'').trim().toLowerCase();
+ if(login&&email){const q=await pool.query('SELECT * FROM usuarios WHERE login=$1 AND lower(email)=$2 AND enabled=true',[login,email]);
+  if(q.rowCount){const u=q.rows[0];if(await checkEmployee(u)){const token=await tokenFor(u,'RESET');await send(email,'Recuperar senha | Chamados TI Turin',`<p>Login: <strong>${esc(u.login)}</strong></p><p><a href="${esc(link(token))}">Criar nova senha (30 minutos)</a></p>`);}}}
+ res.json({ok:true,mensagem:'Se o login e e-mail estiverem corretos e o vínculo ativo, enviaremos um link.'});
+}));
+app.post('/api/public/set-password',throttle,safe(async(req,res)=>{
+ const raw=String(req.body?.token||''),password=String(req.body?.password||'');
+ if(password.length<10||password.length>128)return res.status(400).json({erro:'Senha deve ter de 10 a 128 caracteres'});
+ const q=await pool.query('SELECT t.*,u.company_code,u.employee_id,u.employee_lookup,u.name,u.cpf_hash,u.enabled,u.login FROM tokens_acesso t JOIN usuarios u ON u.id=t.user_id WHERE t.token_hash=$1 AND t.used_at IS NULL AND t.expires_at>now()',[sha(raw)]);
+ const t=q.rows[0];if(!t?.enabled)return res.status(400).json({erro:'Link inválido ou expirado'});
+ if(!await checkEmployee(t))return res.status(403).json({erro:'Funcionário desligado ou vínculo indisponível'});
+ const client=await pool.connect();try{await client.query('BEGIN');
+ const updated=await client.query('UPDATE tokens_acesso SET used_at=now() WHERE id=$1 AND used_at IS NULL RETURNING id',[t.id]);
+ if(!updated.rowCount)throw Object.assign(Error('Link já utilizado'),{status:409});
+ await client.query('UPDATE usuarios SET passhash=$1 WHERE id=$2',[await bcrypt.hash(password,12),t.user_id]);
+ await client.query('UPDATE tokens_acesso SET used_at=now() WHERE user_id=$1 AND used_at IS NULL',[t.user_id]);
+ await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+ setCookie(res,{id:t.user_id});res.json({ok:true,login:t.login,authenticated:true});
+}));
+app.post('/api/public/login',throttle,safe(async(req,res)=>{
+ const login=String(req.body?.login||'').trim().toLowerCase(),password=String(req.body?.password||'');
+ const q=await pool.query('SELECT * FROM usuarios WHERE login=$1 AND enabled=true',[login]);
+ const u=q.rows[0];if(!u?.passhash||!await bcrypt.compare(password,u.passhash))return res.status(401).json({erro:'Login ou senha incorretos'});
+ if(!await checkEmployee(u))return res.status(403).json({erro:'Funcionário desligado ou vínculo funcional indisponível'});
+ setCookie(res,u);res.json({id:u.id,name:u.name,login:u.login,role:u.role});
+}));
 app.post('/api/logout',(_req,res)=>{res.clearCookie('turin_ti',{path:'/'});res.json({ok:true});});
 app.get('/api/me',auth,(req,res)=>res.json(req.user));
 const allowed=['image/jpeg','image/png','image/webp','application/pdf'];const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024,files:5},fileFilter:(req,file,cb)=>cb(null,allowed.includes(file.mimetype))});
@@ -70,11 +111,11 @@ app.post('/api/admin/invite',auth,admin,throttle,safe(async(req,res)=>{
    if(current.role==='ANALISTA'&&role==='COLABORADOR')return res.status(409).json({erro:'Analista existente não pode ser rebaixado por convite'});
    await pool.query('UPDATE usuarios SET enabled=true,role=$1 WHERE id=$2',[role,current.id]);
  }else{
-   await pool.query('INSERT INTO usuarios(company_code,employee_id,name,email,role) VALUES($1,$2,$3,$4,$5)',[company,eid,employee.name,email,role]);
+   const login=await allocateLogin(pool,employee.name);await pool.query('INSERT INTO usuarios(company_code,employee_id,employee_lookup,cpf_hash,login,name,email,role) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[company,eid,employee.lookup||employee.name,employee.cpf?cpfHash(employee.cpf):null,login,employee.name,email,role]);
  }
- const q=await pool.query('SELECT id,email FROM usuarios WHERE company_code=$1 AND employee_id=$2',[company,eid]);
+ const q=await pool.query('SELECT id,email,login FROM usuarios WHERE company_code=$1 AND employee_id=$2',[company,eid]);
  const token=await tokenFor(q.rows[0],'CONVITE');
- await send(email,role==='ANALISTA'?'Convite para equipe de TI | Turin':'Convite de acesso aos chamados | Turin',`<p>${esc(employee.name)}, seu acesso ao portal de chamados da Turin foi autorizado pela equipe de TI.</p><p><a href="${esc(link(token))}">Criar senha (válido por 30 minutos)</a></p>`);
+ await send(email,role==='ANALISTA'?'Convite para equipe de TI | Turin':'Convite de acesso aos chamados | Turin',`<p>${esc(employee.name)}, seu acesso ao portal de chamados da Turin foi autorizado pela equipe de TI.</p><p>Login: <strong>${esc(q.rows[0].login)}</strong></p><p><a href="${esc(link(token))}">Criar senha (válido por 30 minutos)</a></p>`);
  res.json({ok:true});
 }));
 app.use('/api',(req,res)=>res.status(404).json({erro:'Rota não encontrada'}));app.use(express.static(path.join(__dirname,'../public')));app.get('*',(_req,res)=>res.sendFile(path.join(__dirname,'../public/index.html')));
