@@ -56,3 +56,12 @@ Crie um projeto/serviço novo, separado dos existentes, vincule o código a um r
 ## Nomenclatura das tabelas
 
 As tabelas PostgreSQL foram padronizadas em português: `usuarios`, `tokens_acesso`, `chamados`, `interacoes` e `anexos`. A migração é executada automaticamente na inicialização e renomeia as tabelas existentes, preservando os dados e as chaves estrangeiras. As colunas e os endpoints da API mantêm seus nomes originais, para evitar incompatibilidade com o frontend.
+
+## Integrações e cadastro seguro
+
+- O domínio público é `https://chamados-ti-production-8b74.up.railway.app`. Configure `PUBLIC_URL` no Railway se for utilizar outro endereço.
+- Configure no serviço Chamados TI: `ALTERDATA_API_BASE`, `ALTERDATA_PROXY_KEY` (quando aplicável), `BREVO_API_KEY`, `BREVO_FROM_EMAIL` e `BREVO_FROM_NAME`. Use os valores autorizados pelo administrador da infraestrutura, sem publicá-los no GitHub.
+- O cadastro automático exige correspondência entre e-mail informado e e-mail confiável retornado pela API Alterdata. Sem esse dado, o funcionário solicita um convite à TI.
+- O administrador pode convidar colaboradores e analistas após verificar a identidade. O convite oferece criação da senha por link temporário enviado pelo Brevo.
+- A busca pública por nomes não disponibiliza e-mails funcionais.
+- Confirme os campos reais de desligamento e e-mail funcional retornados pelo Alterdata antes de liberar acesso em produção.
