@@ -4,7 +4,7 @@ const alter=require('./alterdata'),{send,esc}=require('./mail');
 const app=express();app.disable('x-powered-by');app.set('trust proxy',1);app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'"],imgSrc:["'self'","data:"],connectSrc:["'self'"]}}}));app.use(express.json({limit:'70kb'}));app.use(cookie());
 const pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_SSL==='true'?{rejectUnauthorized:true}:undefined});
 const safe=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
-const publicUrl=process.env.PUBLIC_URL||'https://chamados-ti-production-8b74.up.railway.app';
+const publicUrl=process.env.PUBLIC_URL||'https://chamados.up.railway.app';
 const secret=process.env.SESSION_SECRET;
 // A chave precisa ser configurada como variável secreta no Railway, nunca no repositório.
 if(!secret||secret.length<32)throw Error('Configuração ausente: SESSION_SECRET deve conter pelo menos 32 caracteres. Defina em Railway > Serviço > Variables.');
