@@ -203,9 +203,14 @@ app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
    count(t.id) FILTER (WHERE t.status='RESOLVIDO')::int resolved,
    count(t.id) FILTER (WHERE t.status IN ('ABERTO','EM_ATENDIMENTO','AGUARDANDO_USUARIO'))::int active,
    count(t.id) FILTER (WHERE t.status='AGUARDANDO_USUARIO')::int waiting,
+   count(v.ticket_id)::int reviews_count,
+   round(avg(v.rating)::numeric,2) AS avg_rating,
+   round(avg(v.solution_rating)::numeric,2) AS avg_solution_rating,
+   round(avg(v.time_rating)::numeric,2) AS avg_time_rating,
    round((avg(extract(epoch FROM (t.resolved_at-t.created_at))/3600) FILTER(WHERE t.resolved_at IS NOT NULL))::numeric,1) avg_resolution_hours,
    round((avg(extract(epoch FROM (fr.first_response_at-t.created_at))/3600) FILTER(WHERE fr.first_response_at IS NOT NULL))::numeric,1) avg_first_response_hours
    FROM usuarios u LEFT JOIN chamados t ON t.assignee_id=u.id AND ${where}
+   LEFT JOIN avaliacoes_chamados v ON v.ticket_id=t.id
    LEFT JOIN LATERAL (
       SELECT min(i.created_at) AS first_response_at FROM interacoes i
       JOIN usuarios author ON author.id=i.author_id
