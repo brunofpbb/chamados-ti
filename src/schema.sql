@@ -64,7 +64,13 @@ CREATE TABLE IF NOT EXISTS interacoes (
 );
 -- Visibilidade explícita: mensagens antigas permanecem públicas.
 ALTER TABLE interacoes ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'SOLICITANTE';
-ALTER TABLE interacoes ADD CONSTRAINT interacoes_visibility_check CHECK (visibility IN ('SOLICITANTE','EQUIPE'));
+DO $visibility$
+BEGIN
+ IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='interacoes_visibility_check' AND conrelid='interacoes'::regclass) THEN
+  ALTER TABLE interacoes ADD CONSTRAINT interacoes_visibility_check CHECK (visibility IN ('SOLICITANTE','EQUIPE'));
+ END IF;
+END
+$visibility$;
 
 CREATE TABLE IF NOT EXISTS avaliacoes_chamados (
  ticket_id BIGINT PRIMARY KEY REFERENCES chamados(id) ON DELETE CASCADE,
