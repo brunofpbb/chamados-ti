@@ -92,3 +92,27 @@
 .dashboard-filterhint{font-size:12px;line-height:1.5;margin:15px 0 0;color:#788b7d}
 @media(max-width:1350px){.dashboard-filtergrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.dashboard-filterbar{padding:16px}.dashboard-filterhead{align-items:stretch;flex-direction:column}.dashboard-filterhead button{align-self:flex-start}.dashboard-filtergrid{grid-template-columns:1fr}}
+
+/* Telas de chamados compactas, sem centralização vertical e sem rolagem horizontal global. */
+.layout{width:100%;max-width:100%;min-width:0;align-items:stretch}
+.sidebar{flex:0 0 254px}
+.main{flex:1 1 0%;min-width:0;width:auto;max-width:none;margin:0;padding:24px 28px 28px;align-self:stretch}
+.main>.top{margin-bottom:20px;align-items:center}
+.main .top h1{font-size:28px}
+.ticket-list-card{padding:17px 20px}
+.ticket-list-card .filters{margin-bottom:10px}
+.ticket-list-card .table-wrap{max-width:100%}
+.ticket-list-card table{width:100%}
+.ticket-list-card td{padding-top:12px;padding-bottom:12px}
+.new-ticket-card{width:100%;max-width:1000px;padding:21px 24px}
+.new-ticket-card .form-grid{column-gap:18px;row-gap:14px}
+.new-ticket-card .field{gap:5px}
+.new-ticket-card .field input,.new-ticket-card .field select{padding:10px 12px;min-height:44px}
+.new-ticket-card .field textarea{min-height:90px;max-height:240px;padding:10px 12px}
+.new-ticket-card .btnrow{margin-top:2px}
+.new-ticket-card .file-picker,.ticket-section .file-picker{min-height:0;gap:9px;padding:7px 10px;border-radius:9px;flex-wrap:wrap}
+.new-ticket-card .file-picker-button,.ticket-section .file-picker-button{width:auto;min-height:36px;padding:8px 12px;font-size:12px!important;border-radius:8px;flex:0 0 auto;transform:none}
+.new-ticket-card .file-picker-count,.ticket-section .file-picker-count{font-size:12px;line-height:1.35}
+.new-ticket-card .file-picker-button:hover,.ticket-section .file-picker-button:hover{transform:none}
+@media(max-width:1000px){.main{padding:20px 20px 26px}.sidebar{flex-basis:230px}.new-ticket-card{padding:18px 20px}}
+@media(max-width:760px){.layout{display:block}.sidebar{width:100%;height:auto;position:static}.main{width:100%;padding:18px 14px 24px}.main>.top{margin-bottom:16px}.new-ticket-card{padding:16px}.new-ticket-card .form-grid{grid-template-columns:1fr;gap:12px}.new-ticket-card .field.wide{grid-column:1}.new-ticket-card .file-picker-button{width:auto}.ticket-list-card{padding:14px}}
