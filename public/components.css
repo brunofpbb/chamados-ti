@@ -242,3 +242,19 @@
 .ticket-list-card .multi-filters .multi-filter-option{font-weight:500}
 .ticket-list-card .multi-filter-options{overflow-x:hidden}
 .ticket-list-card .multi-filter-actions button{min-width:0}
+
+/* Navegação: avaliações discretas e contador junto ao título, nunca em linha isolada. */
+.sidebar .nav[data-go="notifications"]{display:flex;align-items:center;gap:7px;min-height:43px;white-space:nowrap;font-size:13px;font-weight:500}
+.sidebar .nav[data-go="notifications"].active{font-weight:700}
+.nav-bell{display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;width:16px;height:16px;color:inherit}
+.sidebar .nav[data-go="notifications"] .nav-count{margin:0 0 0 2px;min-width:17px;width:auto;height:17px;padding:0 5px;font-size:10px;line-height:17px;color:#164b28;background:#d6f0de;box-shadow:none;flex:0 0 auto}
+@media(max-width:760px){.sidebar .nav[data-go="notifications"]{white-space:nowrap!important;font-size:13px}.sidebar .nav[data-go="notifications"] .nav-count{margin-left:4px}}
+
+/* Gestão de usuários: título à esquerda e filtros alinhados na mesma linha. */
+.users-list-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;min-width:0}
+.users-list-toolbar h2{margin:0;flex:1 1 auto;white-space:nowrap}
+.users-list-filters{display:grid;grid-template-columns:minmax(210px,300px) minmax(155px,210px);gap:10px;align-items:center;flex:0 1 auto;min-width:0}
+.users-list-filters input,.users-list-filters select{box-sizing:border-box;width:100%;min-width:0;max-width:none;height:44px;border:1px solid #d6e6db;border-radius:10px;padding:10px 12px;background:#fff;color:#214530;font:inherit;font-size:13px;outline:none}
+.users-list-filters input:focus,.users-list-filters select:focus{border-color:#08743c;box-shadow:0 0 0 3px #08743c1a}
+@media(max-width:950px){.users-list-toolbar{flex-direction:column;align-items:stretch}.users-list-filters{flex:1 1 auto;grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.users-list-filters{grid-template-columns:1fr}.users-list-toolbar h2{white-space:normal}}
