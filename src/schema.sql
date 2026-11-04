@@ -62,6 +62,21 @@ CREATE TABLE IF NOT EXISTS interacoes (
  id BIGSERIAL PRIMARY KEY, ticket_id BIGINT NOT NULL REFERENCES chamados(id), author_id BIGINT NOT NULL REFERENCES usuarios(id),
  kind TEXT NOT NULL, body TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Visibilidade explícita: mensagens antigas permanecem públicas.
+ALTER TABLE interacoes ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'SOLICITANTE';
+ALTER TABLE interacoes ADD CONSTRAINT interacoes_visibility_check CHECK (visibility IN ('SOLICITANTE','EQUIPE'));
+
+CREATE TABLE IF NOT EXISTS avaliacoes_chamados (
+ ticket_id BIGINT PRIMARY KEY REFERENCES chamados(id) ON DELETE CASCADE,
+ requester_id BIGINT NOT NULL REFERENCES usuarios(id),
+ rating SMALLINT NOT NULL CHECK(rating BETWEEN 1 AND 5),
+ solution_rating SMALLINT NOT NULL CHECK(solution_rating BETWEEN 1 AND 5),
+ time_rating SMALLINT NOT NULL CHECK(time_rating BETWEEN 1 AND 5),
+ comment TEXT NOT NULL DEFAULT '',
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_avaliacoes_requester ON avaliacoes_chamados(requester_id,created_at DESC);
+
 -- Compartilhamento: responsável continua único, colaboradores de TI adicionais podem acompanhar.
 CREATE TABLE IF NOT EXISTS chamados_compartilhados (
  ticket_id BIGINT NOT NULL REFERENCES chamados(id) ON DELETE CASCADE,
