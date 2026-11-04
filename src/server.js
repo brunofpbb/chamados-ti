@@ -147,7 +147,7 @@ app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
    count(*) FILTER(WHERE t.status='EM_ATENDIMENTO')::int in_progress,
    count(*) FILTER(WHERE t.status='AGUARDANDO_USUARIO')::int waiting,
    count(*) FILTER(WHERE t.assignee_id IS NULL AND t.status NOT IN ('CANCELADO','RESOLVIDO'))::int unassigned,
-   round(avg(extract(epoch FROM(t.resolved_at-t.created_at))/3600)::numeric,1) FILTER(WHERE t.resolved_at IS NOT NULL) avg_resolution_hours
+   round((avg(extract(epoch FROM(t.resolved_at-t.created_at))/3600) FILTER(WHERE t.resolved_at IS NOT NULL))::numeric,1) avg_resolution_hours
    FROM chamados t WHERE ${where}`,[days]),
   pool.query(`SELECT status,count(*)::int total FROM chamados t WHERE ${where} GROUP BY status ORDER BY total DESC`,[days]),
   pool.query(`SELECT to_char(t.created_at AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS day,
@@ -162,8 +162,8 @@ app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
    count(t.id) FILTER (WHERE t.status='RESOLVIDO')::int resolved,
    count(t.id) FILTER (WHERE t.status IN ('ABERTO','EM_ATENDIMENTO','AGUARDANDO_USUARIO'))::int active,
    count(t.id) FILTER (WHERE t.status='AGUARDANDO_USUARIO')::int waiting,
-   round(avg(extract(epoch FROM (t.resolved_at-t.created_at))/3600)::numeric,1) FILTER(WHERE t.resolved_at IS NOT NULL) avg_resolution_hours,
-   round(avg(extract(epoch FROM (fr.first_response_at-t.created_at))/3600)::numeric,1) FILTER(WHERE fr.first_response_at IS NOT NULL) avg_first_response_hours
+   round((avg(extract(epoch FROM (t.resolved_at-t.created_at))/3600) FILTER(WHERE t.resolved_at IS NOT NULL))::numeric,1) avg_resolution_hours,
+   round((avg(extract(epoch FROM (fr.first_response_at-t.created_at))/3600) FILTER(WHERE fr.first_response_at IS NOT NULL))::numeric,1) avg_first_response_hours
    FROM usuarios u LEFT JOIN chamados t ON t.assignee_id=u.id AND ${where}
    LEFT JOIN LATERAL (
       SELECT min(i.created_at) AS first_response_at FROM interacoes i
