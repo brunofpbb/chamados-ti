@@ -262,3 +262,25 @@
 /* A mesma seta SVG é usada em todos os filtros múltiplos, sem glifo da fonte. */
 .multi-filter-summary .multi-filter-chevron svg{display:block;flex:none;width:16px;height:16px;stroke:currentColor}
 @media(min-width:1151px) and (max-width:1390px){.ticket-list-card .multi-filters{grid-template-columns:minmax(210px,1.3fr) repeat(3,minmax(118px,1fr)) auto;gap:8px}}
+
+/* Chamados compartilhados: identificação visível sem abrir cada ticket. */
+.sidebar .shared-nav{display:flex;align-items:center;gap:7px;font-size:13px;white-space:normal}
+.sidebar .shared-nav-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;flex:0 0 16px;font-size:18px;line-height:1}
+.sidebar .shared-nav-count{display:inline-flex;justify-content:center;align-items:center;margin-left:auto;min-width:21px;height:21px;padding:0 6px;border-radius:99px;background:#d7f1df;color:#075b2d;font-size:11px;font-weight:800;flex-shrink:0}
+.shared-ticket-tag{display:inline-flex;align-items:center;background:#e8f2fb;color:#254d70;border:1px solid #c9deef;border-radius:7px;padding:4px 7px;font-size:10px;font-weight:750;white-space:nowrap}
+.shared-ticket-tag:before{content:"⇄";font-size:13px;margin-right:4px}
+.shared-home-card{margin:0 0 20px;border:1px solid #c4decf}
+.shared-home-card .sectionhead{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.shared-home-card .sectionhead h2,.shared-list-card .sectionhead h2{margin:0 0 5px}
+.shared-home-card .sectionhead .muted{font-size:12px;line-height:1.5;margin:0}
+.shared-home-card .table-wrap,.shared-list-card .table-wrap{max-width:100%;overflow-x:auto}
+.shared-list-card{margin:0 0 20px}
+.shared-list-card>.muted{font-size:12px;margin:6px 0 18px}
+.shared-heading-count{display:inline-flex;align-items:center;justify-content:center;min-width:23px;height:23px;padding:0 7px;border-radius:99px;background:#e3f3e8;color:#075b2d;font-size:12px;font-weight:800;vertical-align:middle}
+.shared-empty{padding:20px 15px;text-align:center;background:#f7fbf8;border-radius:9px;color:#59715f;font-size:13px}
+@media(max-width:760px){
+ .sidebar .shared-nav{font-size:13px;min-height:46px}
+ .shared-home-card .sectionhead{align-items:flex-start;flex-wrap:wrap}
+ .shared-home-card .sectionhead button{flex-shrink:0}
+ .shared-home-card,.shared-list-card{padding:15px}
+}
