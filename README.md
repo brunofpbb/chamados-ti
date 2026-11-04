@@ -83,3 +83,13 @@ No projeto `Analista-DP`, o arquivo `backend/src/services/alterdataClient.js` co
 - Contas existentes receberam um login legado `usuario-ID`, preservando registros e senhas; podem ser migradas administrativamente para nome.sobrenome.
 
 **Risco de identidade:** conhecer o CPF e controlar o e-mail escolhido não comprova que o solicitante é o titular do vínculo. Antes da liberação ampla, implemente verificação adicional (aprovação pelo RH/TI ou outro fator previamente vinculado ao funcionário), sobretudo quando o e-mail é compartilhado. Até lá, trate o primeiro acesso como piloto supervisionado. A confirmação do link demonstra controle da caixa de e-mail, não da identidade funcional.
+
+## Atendimento compartilhado e dashboard administrativo
+
+- Um chamado conserva **um responsável principal**. Esse responsável ou um administrador pode adicionar outros analistas/administradores em **Equipe de apoio**, sem alterar a atribuição original.
+- O compartilhamento é registrado na tabela `chamados_compartilhados`, com rastreamento no histórico de interações. Os participantes recebem e-mail quando convidados e nas mensagens/atualizações do chamado. O compartilhamento pode ser removido pelo responsável principal ou administrador.
+- Somente o perfil **ADMIN** pode visualizar o menu e acessar `GET /api/dashboard`. Os filtros do painel são 7, 30, 90, 365 dias ou todo o histórico.
+- Indicadores: volume, resoluções, taxa, tempo médio, status, pendências sem responsável, categorias, prioridades, unidades, evolução diária, idade dos chamados e desempenho dos analistas.
+- O desempenho do analista considera o **responsável principal atual** de cada chamado aberto no período, inclusive se foi atribuído depois da abertura. Participantes compartilhados **não duplicam** volume ou resolução. A taxa de resolução é resolvidos / atribuídos; o tempo de primeira resposta considera a primeira mensagem de um analista ou administrador (não mudança de status).
+- A idade dos pendentes usa horas corridas, não SLA. A ausência de registro de primeira resposta ou resolução é exibida como travessão, não zero.
+- O design inclui cards separados com espaçamento consistente, formulário de atendimento organizado, equipe de apoio separada e e-mails em duas colunas (marca Turin à esquerda, central de serviços à direita).
