@@ -97,7 +97,10 @@ const listSql='SELECT t.id,t.subject,t.category,t.description,t.urgency,t.status
 app.get('/api/tickets',auth,safe(async(req,res)=>{const analyst=req.user.role!=='COLABORADOR';const q=await pool.query(listSql+(analyst?'':' WHERE t.requester_id=$1')+' ORDER BY t.created_at DESC LIMIT 500',analyst?[]:[req.user.id]);res.json(q.rows);}));
 app.post('/api/tickets',auth,upload.array('files',5),safe(async(req,res)=>{const {subject,description,category,urgency}=req.body;if(!subject?.trim()||subject.length>180||!description?.trim()||description.length>5000)return res.status(400).json({erro:'Informe assunto e descrição'});const urg=['BAIXA','NORMAL','ALTA','CRITICA'].includes(urgency)?urgency:'NORMAL';const client=await pool.connect();let row;try{await client.query('BEGIN');const r=await client.query('INSERT INTO chamados(requester_id,company_code,subject,description,category,urgency) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[req.user.id,req.user.company_code,subject.trim(),description.trim(),String(category||'Outros').slice(0,80),urg]);row=r.rows[0];await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,'ABERTURA',$3)",[row.id,req.user.id,description.trim()]);await saveAttachments(client,req.files,row.id,req.user.id);await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}if(!req.user.is_test)send(req.user.email,'Chamado #'+row.id+' aberto | Turin',`<p>Seu chamado <strong>#${row.id}</strong> foi registrado com sucesso. A equipe de TI já pode acompanhar sua solicitação.</p><p><b>Assunto:</b> ${esc(subject)}</p><p><b>Categoria:</b> ${esc(String(category||'Outros'))}</p><p><b>Prioridade:</b> ${esc(urg)}</p><p><b>Situação:</b> Aberto, aguardando atendimento.</p>`).catch(e=>console.error('Notificação',e));res.status(201).json({id:row.id});}));
 async function ticketAccess(req,res,next){try{const q=await pool.query(listSql+' WHERE t.id=$1',[req.params.id]);const t=q.rows[0];if(!t)return res.status(404).json({erro:'Chamado não encontrado'});if(req.user.role==='COLABORADOR'&&String(t.requester_id)!==String(req.user.id))return res.status(403).json({erro:'Sem acesso'});req.ticket=t;next();}catch(e){next(e);}}
-app.get('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{const i=await pool.query('SELECT i.id,i.kind,i.body,i.created_at,u.name AS author FROM interacoes i JOIN usuarios u ON u.id=i.author_id WHERE i.ticket_id=$1 ORDER BY i.created_at',[req.params.id]);const a=await pool.query('SELECT id,interaction_id,filename,mime,created_at FROM anexos WHERE ticket_id=$1 ORDER BY id',[req.params.id]);const shared=await pool.query('SELECT u.id,u.name,u.role,c.created_at FROM chamados_compartilhados c JOIN usuarios u ON u.id=c.user_id WHERE c.ticket_id=$1 ORDER BY u.name',[req.params.id]);res.json({ticket:req.ticket,interactions:i.rows,attachments:a.rows,shared:shared.rows});}));
+app.get('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{const isStaff=req.user.role!=='COLABORADOR';
+ const i=await pool.query("SELECT i.id,i.kind,i.body,i.visibility,i.created_at,u.name AS author FROM interacoes i JOIN usuarios u ON u.id=i.author_id WHERE i.ticket_id=$1 AND ($2::boolean OR i.visibility='SOLICITANTE') ORDER BY i.created_at,i.id",[req.params.id,isStaff]);
+ const a=await pool.query("SELECT a.id,a.interaction_id,a.filename,a.mime,a.created_at FROM anexos a LEFT JOIN interacoes i ON i.id=a.interaction_id WHERE a.ticket_id=$1 AND ($2::boolean OR a.interaction_id IS NULL OR i.visibility='SOLICITANTE') ORDER BY a.id",[req.params.id,isStaff]);const shared=await pool.query('SELECT u.id,u.name,u.role,c.created_at FROM chamados_compartilhados c JOIN usuarios u ON u.id=c.user_id WHERE c.ticket_id=$1 ORDER BY u.name',[req.params.id]);const review=await pool.query('SELECT rating,solution_rating,time_rating,comment,created_at FROM avaliacoes_chamados WHERE ticket_id=$1',[req.params.id]);
+ res.json({ticket:req.ticket,interactions:i.rows,attachments:a.rows,shared:isStaff?shared.rows:[],review:review.rows[0]||null});}));
 app.post('/api/tickets/:id/share',auth,manager,ticketAccess,safe(async(req,res)=>{
  const ticket=req.ticket;
  if(['CANCELADO','RESOLVIDO'].includes(ticket.status))return res.status(409).json({erro:'Chamado encerrado'});
@@ -120,7 +123,7 @@ app.delete('/api/tickets/:id/share/:userId',auth,manager,ticketAccess,safe(async
  if(r.rowCount){await pool.query("INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,'COMPARTILHAMENTO',$3)",[req.ticket.id,req.user.id,'Acesso compartilhado removido do usuário #'+req.params.userId]);}
  res.json({ok:true,removed:r.rowCount>0});
 }));
-app.get('/api/attachments/:id',auth,safe(async(req,res)=>{const q=await pool.query('SELECT a.*,t.requester_id FROM anexos a JOIN chamados t ON t.id=a.ticket_id WHERE a.id=$1',[req.params.id]);const f=q.rows[0];if(!f)return res.sendStatus(404);if(req.user.role==='COLABORADOR'&&String(f.requester_id)!==String(req.user.id))return res.sendStatus(403);res.set({'Content-Type':f.mime,'Content-Disposition':'attachment; filename="'+f.filename.replace(/["\r\n]/g,'_')+'"','X-Content-Type-Options':'nosniff','Cache-Control':'private, no-store'});res.send(f.data);}));
+app.get('/api/attachments/:id',auth,safe(async(req,res)=>{const q=await pool.query("SELECT a.*,t.requester_id,i.visibility FROM anexos a JOIN chamados t ON t.id=a.ticket_id LEFT JOIN interacoes i ON i.id=a.interaction_id WHERE a.id=$1",[req.params.id]);const f=q.rows[0];if(!f)return res.sendStatus(404);if(req.user.role==='COLABORADOR'&&String(f.requester_id)!==String(req.user.id))return res.sendStatus(403);if(req.user.role==='COLABORADOR'&&f.visibility==='EQUIPE')return res.sendStatus(403);res.set({'Content-Type':f.mime,'Content-Disposition':'attachment; filename="'+f.filename.replace(/["\r\n]/g,'_')+'"','X-Content-Type-Options':'nosniff','Cache-Control':'private, no-store'});res.send(f.data);}));
 async function notifyTicketParticipants(ticketId,requesterId,subject,html){
  const q=await pool.query(`SELECT DISTINCT u.email FROM usuarios u WHERE u.enabled=true AND u.is_test=false AND u.id IN (
  SELECT $2::bigint UNION SELECT assignee_id FROM chamados WHERE id=$1 AND assignee_id IS NOT NULL
@@ -131,8 +134,40 @@ async function notifyTicketParticipants(ticketId,requesterId,subject,html){
 const statuses=['ABERTO','EM_ATENDIMENTO','AGUARDANDO_USUARIO','RESOLVIDO','CANCELADO'];
 const statusTitle=s=>({ABERTO:'Aberto',EM_ATENDIMENTO:'Em atendimento',AGUARDANDO_USUARIO:'Aguardando usuário',RESOLVIDO:'Resolvido',CANCELADO:'Cancelado'}[s]||s);
 
-app.post('/api/tickets/:id/interaction',auth,ticketAccess,upload.array('files',5),safe(async(req,res)=>{const body=String(req.body?.body||'').trim();if(!body||body.length>5000)return res.status(400).json({erro:'Escreva uma mensagem'});if(['CANCELADO','RESOLVIDO'].includes(req.ticket.status))return res.status(409).json({erro:'Chamado encerrado'});const client=await pool.connect();try{await client.query('BEGIN');const q=await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,'MENSAGEM',$3) RETURNING id",[req.params.id,req.user.id,body]);await saveAttachments(client,req.files,req.params.id,req.user.id,q.rows[0].id);await client.query('UPDATE chamados SET updated_at=now() WHERE id=$1',[req.params.id]);await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}notifyTicketParticipants(req.ticket.id,req.ticket.requester_id,'Nova interação no chamado #'+req.params.id,`<p>Uma nova mensagem foi registrada no chamado <strong>#${esc(req.params.id)}</strong>.</p><p><b>Mensagem:</b></p><blockquote>${esc(body)}</blockquote><p>Acompanhe o histórico completo pelo portal.</p>`).catch(console.error);res.json({ok:true});}));
+app.post('/api/tickets/:id/interaction',auth,ticketAccess,upload.array('files',5),safe(async(req,res)=>{
+ const body=String(req.body?.body||'').trim(),visibility=String(req.body?.visibility||'SOLICITANTE');
+ if(!body||body.length>5000)return res.status(400).json({erro:'Escreva uma mensagem'});
+ if(!['SOLICITANTE','EQUIPE'].includes(visibility))return res.status(400).json({erro:'Destino da mensagem inválido'});
+ if(visibility==='EQUIPE'&&req.user.role==='COLABORADOR')return res.status(403).json({erro:'Mensagens internas são exclusivas da equipe de TI'});
+ if(['CANCELADO','RESOLVIDO'].includes(req.ticket.status))return res.status(409).json({erro:'Chamado encerrado'});
+ const client=await pool.connect();
+ try{
+ await client.query('BEGIN');
+ const q=await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body,visibility) VALUES($1,$2,'MENSAGEM',$3,$4) RETURNING id",[req.params.id,req.user.id,body,visibility]);
+ await saveAttachments(client,req.files,req.params.id,req.user.id,q.rows[0].id);
+ await client.query('UPDATE chamados SET updated_at=now() WHERE id=$1',[req.params.id]);
+ await client.query('COMMIT');
+ }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+ if(visibility==='SOLICITANTE')notifyTicketParticipants(req.ticket.id,req.ticket.requester_id,'Nova interação no chamado #'+req.params.id,`<p>Uma nova mensagem foi registrada no chamado <strong>#${esc(req.params.id)}</strong>.</p><blockquote>${esc(body)}</blockquote><p>Acompanhe o histórico pelo portal.</p>`).catch(console.error);
+ // Mensagens internas nunca são enviadas por e-mail ao solicitante.
+ res.json({ok:true,visibility});
+}));
 app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{const t=req.ticket;const isManager=req.user.role!=='COLABORADOR';const status=String(req.body?.status||t.status);const assignee=req.body?.assigneeId===null?null:req.body?.assigneeId===undefined?t.assignee_id:Number(req.body.assigneeId);if(!statuses.includes(status))return res.status(400).json({erro:'Status inválido'});if(!isManager&&(status!=='CANCELADO'||!['ABERTO','EM_ATENDIMENTO','AGUARDANDO_USUARIO'].includes(t.status)))return res.status(403).json({erro:'Só é permitido cancelar chamado em andamento'});if(t.status==='CANCELADO'||t.status==='RESOLVIDO')return res.status(409).json({erro:'Chamado encerrado'});if(isManager&&assignee!==null){const q=await pool.query("SELECT id FROM usuarios WHERE id=$1 AND role IN ('ANALISTA','ADMIN') AND enabled=true",[assignee]);if(!q.rowCount)return res.status(400).json({erro:'Analista inválido'});}const client=await pool.connect();try{await client.query('BEGIN');await client.query('UPDATE chamados SET status=$1,assignee_id=$2,updated_at=now(),resolved_at=CASE WHEN $1=\'RESOLVIDO\' THEN now() ELSE NULL END WHERE id=$3',[status,isManager?assignee:t.assignee_id,t.id]);await client.query('INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,$3,$4)',[t.id,req.user.id,'ALTERACAO',`Status: ${t.status} → ${status}; responsável: ${isManager?assignee??'não atribuído':t.assignee_id??'não atribuído'}`]);await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}notifyTicketParticipants(t.id,t.requester_id,'Atualização do chamado #'+t.id,`<p>O chamado <strong>#${t.id}</strong> recebeu uma atualização.</p><p><b>Assunto:</b> ${esc(t.subject)}</p><p><b>Nova situação:</b> ${esc(statusTitle(status))}</p><p>Você pode acompanhar todas as etapas do atendimento no portal.</p>`).catch(console.error);res.json({ok:true});}));
+app.get('/api/notifications',auth,safe(async(req,res)=>{
+ if(req.user.role!=='COLABORADOR')return res.json({pending:0,items:[]});
+ const q=await pool.query("SELECT t.id,t.subject,t.resolved_at,t.assignee_id,a.name AS assignee_name,round((extract(epoch FROM(t.resolved_at-t.created_at))/3600)::numeric,1) AS duration_hours FROM chamados t LEFT JOIN avaliacoes_chamados v ON v.ticket_id=t.id LEFT JOIN usuarios a ON a.id=t.assignee_id WHERE t.requester_id=$1 AND t.status='RESOLVIDO' AND v.ticket_id IS NULL ORDER BY t.resolved_at DESC LIMIT 30",[req.user.id]);
+ res.json({pending:q.rowCount,items:q.rows});
+}));
+app.post('/api/tickets/:id/review',auth,ticketAccess,safe(async(req,res)=>{
+ if(req.user.role!=='COLABORADOR'&&String(req.user.id)!==String(req.ticket.requester_id))return res.status(403).json({erro:'Somente o solicitante pode avaliar'});
+ if(String(req.user.id)!==String(req.ticket.requester_id))return res.status(403).json({erro:'Somente o solicitante pode avaliar'});
+ if(req.ticket.status!=='RESOLVIDO')return res.status(409).json({erro:'O chamado precisa estar resolvido para ser avaliado'});
+ const rating=Number(req.body?.rating),solution=Number(req.body?.solutionRating),time=Number(req.body?.timeRating),comment=String(req.body?.comment||'').trim();
+ if(![rating,solution,time].every(n=>Number.isInteger(n)&&n>=1&&n<=5)||comment.length>1000)return res.status(400).json({erro:'Avalie atendimento, solução e prazo com notas de 1 a 5'});
+ const q=await pool.query('INSERT INTO avaliacoes_chamados(ticket_id,requester_id,rating,solution_rating,time_rating,comment) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(ticket_id) DO NOTHING RETURNING ticket_id',[req.ticket.id,req.user.id,rating,solution,time,comment]);
+ if(!q.rowCount)return res.status(409).json({erro:'Este chamado já foi avaliado'});
+ res.status(201).json({ok:true});
+}));
 app.get('/api/analysts',auth,manager,safe(async(req,res)=>{const q=await pool.query("SELECT id,name,company_code,email,role FROM usuarios WHERE role IN ('ANALISTA','ADMIN') AND enabled=true ORDER BY name");res.json(q.rows);}));
 app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
  const options={'7':7,'30':30,'90':90,'365':365,'all':null};
@@ -146,7 +181,7 @@ app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
  if(analyst!==null&&!Number.isSafeInteger(analyst))return res.status(400).json({erro:'Analista inválido'});
  const params=[days,company||null,analyst,category||null];
  const where="($1::int IS NULL OR t.created_at >= now() - ($1::int * interval '1 day')) AND ($2::text IS NULL OR t.company_code=$2) AND ($3::bigint IS NULL OR t.assignee_id=$3) AND ($4::text IS NULL OR t.category=$4)";
- const [overall,statuses,daily,units,categories,priorities,analysts,aging,filterOptions]=await Promise.all([
+ const [overall,statuses,daily,units,categories,priorities,analysts,aging,filterOptions,reviews]=await Promise.all([
   pool.query(`SELECT count(*)::int total,count(*) FILTER(WHERE t.status='RESOLVIDO')::int resolved,
    count(*) FILTER(WHERE t.status='CANCELADO')::int cancelled,
    count(*) FILTER(WHERE t.status='ABERTO')::int open,
@@ -187,11 +222,17 @@ app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
   pool.query(`SELECT
    (SELECT coalesce(json_agg(c ORDER BY c),'[]'::json) FROM (SELECT DISTINCT company_code AS c FROM chamados) companies) AS companies,
    (SELECT coalesce(json_agg(cat ORDER BY cat),'[]'::json) FROM (SELECT DISTINCT category AS cat FROM chamados) categories) AS categories,
-   (SELECT coalesce(json_agg(json_build_object('id',id,'name',name,'company_code',company_code) ORDER BY name),'[]'::json) FROM usuarios WHERE role IN ('ADMIN','ANALISTA') AND enabled=true AND (is_test=false OR test_expires_at>now())) AS analysts`)
+   (SELECT coalesce(json_agg(json_build_object('id',id,'name',name,'company_code',company_code) ORDER BY name),'[]'::json) FROM usuarios WHERE role IN ('ADMIN','ANALISTA') AND enabled=true AND (is_test=false OR test_expires_at>now())) AS analysts`),
+  pool.query(`SELECT count(v.ticket_id)::int reviews_count,
+    round(avg(v.rating)::numeric,2) AS avg_service,
+    round(avg(v.solution_rating)::numeric,2) AS avg_solution,
+    round(avg(v.time_rating)::numeric,2) AS avg_time
+    FROM avaliacoes_chamados v JOIN chamados t ON t.id=v.ticket_id
+    WHERE ${where}`,[...params])
  ]);
  res.json({period,filters:{company,analyst:analystRaw,category},filterOptions:filterOptions.rows[0],overview:overall.rows[0],statuses:statuses.rows,daily:daily.rows,
    units:units.rows,categories:categories.rows,priorities:priorities.rows,
-   analysts:analysts.rows,aging:aging.rows[0]});
+   analysts:analysts.rows,aging:aging.rows[0],reviews:reviews.rows[0]});
 }));
 
 /* Administração: usuários vinculados ao RH e contas temporárias de teste.
