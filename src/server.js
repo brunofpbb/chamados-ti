@@ -175,7 +175,7 @@ app.post('/api/tickets/:id/interaction',auth,ticketAccess,upload.array('files',5
   const q=await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body,visibility) VALUES($1,$2,'MENSAGEM',$3,$4) RETURNING id",[req.ticket.id,req.user.id,body,visibility]);
   await saveAttachments(client,req.files,req.ticket.id,req.user.id,q.rows[0].id);
   if(nextStatus!==oldStatus){
-   await client.query('UPDATE chamados SET status=$1,updated_at=now() WHERE id=$2',[nextStatus,req.ticket.id]);
+   await client.query("UPDATE chamados SET status=$1,updated_at=now(),waiting_since=CASE WHEN $1='AGUARDANDO_USUARIO' THEN now() ELSE NULL END,waiting_cycle=CASE WHEN $1='AGUARDANDO_USUARIO' THEN waiting_cycle+1 ELSE waiting_cycle END WHERE id=$2",[nextStatus,req.ticket.id]);
    await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body,visibility) VALUES($1,$2,'ALTERACAO',$3,'SOLICITANTE')",[req.ticket.id,req.user.id,'Alteração automática: '+statusTitle(oldStatus)+' → '+statusTitle(nextStatus)+'. Motivo: '+reason+'.']);
   }else await client.query('UPDATE chamados SET updated_at=now() WHERE id=$1',[req.ticket.id]);
   await client.query('COMMIT');
@@ -214,7 +214,7 @@ app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{
   if(automaticallyAssumed)nextStatus='EM_ATENDIMENTO';
   changed=nextStatus!==oldStatus||String(actualAssignee??'')!==String(current.assignee_id??'');
   if(changed){
-   await client.query("UPDATE chamados SET status=$1,assignee_id=$2,updated_at=now(),resolved_at=CASE WHEN $1='RESOLVIDO' THEN now() ELSE NULL END,resolution_summary=CASE WHEN $1='RESOLVIDO' THEN $4 ELSE resolution_summary END WHERE id=$3",[nextStatus,actualAssignee,t.id,resolutionSummary||null]);
+   await client.query("UPDATE chamados SET status=$1,assignee_id=$2,updated_at=now(),resolved_at=CASE WHEN $1='RESOLVIDO' THEN now() ELSE NULL END,resolution_summary=CASE WHEN $1='RESOLVIDO' THEN $4 ELSE resolution_summary END,waiting_since=CASE WHEN $1='AGUARDANDO_USUARIO' AND $5<>'AGUARDANDO_USUARIO' THEN now() WHEN $1<>'AGUARDANDO_USUARIO' THEN NULL ELSE waiting_since END,waiting_cycle=CASE WHEN $1='AGUARDANDO_USUARIO' AND $5<>'AGUARDANDO_USUARIO' THEN waiting_cycle+1 ELSE waiting_cycle END WHERE id=$3",[nextStatus,actualAssignee,t.id,resolutionSummary||null,oldStatus]);
    const message=automaticallyAssumed?
     'Alteração automática: Aberto → Em atendimento. Motivo: chamado atribuído a um analista.':
     'Alteração de atendimento: '+statusTitle(oldStatus)+' → '+statusTitle(nextStatus)+'; responsável: '+(current.assignee_id??'não atribuído')+' → '+(actualAssignee??'não atribuído');
@@ -396,5 +396,69 @@ app.post('/api/admin/invite',auth,admin,throttle,safe(async(req,res)=>{
 }));
 app.use('/api',(req,res)=>res.status(404).json({erro:'Rota não encontrada'}));app.use(express.static(path.join(__dirname,'../public')));app.get('*',(_req,res)=>res.sendFile(path.join(__dirname,'../public/index.html')));
 app.use((err,req,res,next)=>{console.error(err);res.status(err.status|| (err instanceof multer.MulterError?400:500)).json({erro:err instanceof multer.MulterError?err.message:err.status?err.message:'Ocorreu um erro interno. Tente novamente.'});});
-async function start(){const c=await pool.connect();try{await c.query(fs.readFileSync(path.join(__dirname,'schema.sql'),'utf8'));}finally{c.release();}app.listen(process.env.PORT||3000,'0.0.0.0',()=>console.log('Chamados TI iniciado'));}
+// Lembretes em tempo corrido (24h/48h) desde a entrada em AGUARDANDO_USUARIO.
+// Bloqueio FOR UPDATE SKIP LOCKED evita que duas instâncias enviem o mesmo aviso.
+const REMINDER_INTERVAL_MS=15*60*1000;
+let reminderJobRunning=false;
+async function sendDueReminders(){
+ if(reminderJobRunning)return;
+ reminderJobRunning=true;
+ try{
+  for(let count=0;count<12;count++){
+   const client=await pool.connect();
+   let hasCandidate=false;
+   try{
+    await client.query('BEGIN');
+    const q=await client.query(`
+     SELECT t.id,t.subject,t.waiting_cycle,t.waiting_since,
+      u.name AS requester_name,u.email,
+      CASE WHEN t.waiting_since<=now()-interval '48 hours' THEN 48 ELSE 24 END AS stage_hours
+     FROM chamados t JOIN usuarios u ON u.id=t.requester_id
+     WHERE t.status='AGUARDANDO_USUARIO'
+       AND t.waiting_since IS NOT NULL
+       AND t.waiting_since<=now()-interval '24 hours'
+       AND u.enabled=true AND u.is_test=false
+       AND nullif(trim(u.email),'') IS NOT NULL
+       AND NOT EXISTS(
+        SELECT 1 FROM lembretes_aguardando_usuario r
+        WHERE r.ticket_id=t.id AND r.waiting_cycle=t.waiting_cycle
+          AND r.stage_hours=CASE WHEN t.waiting_since<=now()-interval '48 hours' THEN 48 ELSE 24 END
+       )
+     ORDER BY t.waiting_since,t.id LIMIT 1 FOR UPDATE OF t SKIP LOCKED
+    `);
+    if(!q.rowCount){await client.query('COMMIT');break;}
+    hasCandidate=true;
+    const item=q.rows[0],stage=Number(item.stage_hours);
+    const elapsed=stage===24?'24 horas':'48 horas';
+    const title='Lembrete: aguardamos sua resposta no chamado #'+item.id;
+    const html=`<p>Olá, <strong>${esc(item.requester_name)}</strong>!</p><p>O chamado <strong>#${item.id}</strong> — ${esc(item.subject)} — está aguardando sua resposta há pelo menos <strong>${elapsed}</strong>.</p><p>Entre no portal para responder à equipe de TI e permitir a continuidade do atendimento.</p><p><strong>Importante:</strong> o chamado permanece aberto. Este lembrete não cancela nem resolve sua solicitação.</p>`;
+    // O e-mail é enviado enquanto o ticket está bloqueado: respostas concorrentes
+    // esperam o fim desta transação, evitando disparo para chamados já respondidos.
+    await send(item.email,title,html);
+    await client.query('INSERT INTO lembretes_aguardando_usuario(ticket_id,waiting_cycle,stage_hours,recipient_email) VALUES($1,$2,$3,$4)',
+      [item.id,item.waiting_cycle,stage,item.email]);
+    await client.query('COMMIT');
+    console.log('Lembrete enviado',JSON.stringify({ticketId:item.id,stageHours:stage}));
+   }catch(e){
+    try{await client.query('ROLLBACK');}catch(rollbackError){console.error('Falha ao reverter lembrete',rollbackError.message);}
+    // Não deixar falha do Brevo repetir envios indefinidamente no mesmo ciclo.
+    console.error('Falha ao processar lembrete:',e.message);
+    break;
+   }finally{client.release();}
+   if(!hasCandidate)break;
+  }
+ }finally{reminderJobRunning=false;}
+}
+function startReminderScheduler(){
+ if(process.env.REMINDERS_ENABLED==='false'){
+  console.log('Lembretes de chamados desabilitados por REMINDERS_ENABLED=false');
+  return;
+ }
+ const run=()=>sendDueReminders().catch(e=>console.error('Falha no agendador de lembretes',e.message));
+ const startup=setTimeout(run,6000);
+ const interval=setInterval(run,REMINDER_INTERVAL_MS);
+ startup.unref?.();interval.unref?.();
+ console.log('Lembretes 24h/48h ativos (verificação a cada 15 minutos)');
+}
+async function start(){const c=await pool.connect();try{await c.query(fs.readFileSync(path.join(__dirname,'schema.sql'),'utf8'));}finally{c.release();}app.listen(process.env.PORT||3000,'0.0.0.0',()=>console.log('Chamados TI iniciado'));startReminderScheduler();}
 start().catch(e=>{console.error('Falha na inicialização',e);process.exit(1)});
