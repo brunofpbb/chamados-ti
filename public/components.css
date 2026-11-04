@@ -351,3 +351,41 @@
 .await-reply-choice strong{font-size:13px;font-weight:750}
 .await-reply-choice small{font-size:12px;color:#637e68;line-height:1.45}
 .await-reply-choice[hidden]{display:none!important}
+
+/*
+ * Correção estrutural: a largura disponível deve ser dividida entre
+ * navegação e conteúdo, não somada à largura intrínseca dos cards.
+ * Evita o scroll horizontal da página com menu expandido ou recolhido.
+ */
+@media(min-width:761px){
+ .layout{display:grid!important;grid-template-columns:254px minmax(0,1fr);width:100%;max-width:100%;min-width:0;align-items:start}
+ .layout.sidebar-collapsed{grid-template-columns:72px minmax(0,1fr)}
+ .layout>.sidebar{width:100%;min-width:0;max-width:100%;flex:none;position:sticky;top:0;align-self:start;height:100dvh}
+ .layout>.main{width:100%;min-width:0;max-width:100%;margin:0;flex:none;align-self:start;box-sizing:border-box}
+}
+@media(min-width:761px) and (max-width:1000px){
+ .layout{grid-template-columns:230px minmax(0,1fr)}
+ .layout.sidebar-collapsed{grid-template-columns:72px minmax(0,1fr)}
+}
+/* Frações flexíveis: nenhum card deve impor largura mínima ao dashboard. */
+.main>.ticket-layout,.ticket-layout{width:100%;max-width:100%;min-width:0;grid-template-columns:minmax(0,1.7fr) minmax(0,.85fr)}
+.ticket-layout>.ticket-main,.ticket-layout>.ticket-aside{width:100%;min-width:0;max-width:100%}
+.ticket-layout .card,.ticket-layout form,.ticket-layout .field,
+.ticket-layout input,.ticket-layout select,.ticket-layout textarea,
+.ticket-layout .timeline,.ticket-layout .event,.ticket-layout .filelist,
+.ticket-layout .file-picker{max-width:100%;min-width:0}
+.ticket-layout .event p,.ticket-layout .event strong,.ticket-layout .event span,
+.ticket-layout .ticket-description,.ticket-layout .attendee-name{overflow-wrap:anywhere}
+.ticket-layout .ticket-heading,.ticket-layout .ticket-meta{min-width:0}
+.ticket-layout .ticket-heading>*{min-width:0}
+.ticket-layout .ticket-heading h2{overflow-wrap:anywhere}
+/* Antes a barra horizontal era causada pelo crescimento da grade além da coluna principal. */
+@media(min-width:761px) and (max-width:1120px){
+ .ticket-layout{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:760px){
+ .ticket-layout{grid-template-columns:minmax(0,1fr)!important}
+ .layout>.main{max-width:100%;min-width:0}
+}
+/* A página rola apenas verticalmente; tabelas amplas mantêm rolagem restrita à tabela. */
+html,body,#root{max-width:100%;overflow-x:clip}
