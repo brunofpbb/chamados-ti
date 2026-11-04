@@ -389,3 +389,9 @@
 }
 /* A página rola apenas verticalmente; tabelas amplas mantêm rolagem restrita à tabela. */
 html,body,#root{max-width:100%;overflow-x:clip}
+
+/* Aviso de anexos: clipe e título lado a lado, com quebra apenas se faltar espaço. */
+.attachment-reminder-heading{display:flex;align-items:center;gap:14px;min-width:0}
+.attachment-reminder-heading .attachment-reminder-icon{flex:0 0 51px}
+.attachment-reminder-heading h2{flex:1 1 auto;min-width:0;margin:0;font-size:22px;line-height:1.2;overflow-wrap:anywhere}
+@media(max-width:370px){.attachment-reminder-heading{gap:10px}.attachment-reminder-heading h2{font-size:19px}}
