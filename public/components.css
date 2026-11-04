@@ -435,11 +435,11 @@ th[aria-sort="ascending"] .ticket-sort-indicator,th[aria-sort="descending"] .tic
  margin-bottom:12px;
 }
 .ticket-list-card .filters.multi-filters>input#search{
- grid-area:search;grid-column:auto;display:block;width:100%;min-width:0;
+ grid-area:search;grid-column:1 / 4;display:block;width:100%;min-width:0;
  box-sizing:border-box;height:44px;min-height:44px;align-self:stretch;
 }
 .ticket-list-card .filters.multi-filters>#clearTicketFilters{
- grid-area:clear;grid-column:auto;justify-self:stretch;align-self:stretch;
+ grid-area:clear;grid-column:4 / 5;justify-self:stretch;align-self:stretch;
  width:100%;min-width:0;height:44px;min-height:44px;white-space:nowrap;
 }
 .ticket-list-card .filters.multi-filters>#companyFilter{grid-area:companies;align-self:stretch}
@@ -457,10 +457,14 @@ th[aria-sort="ascending"] .ticket-sort-indicator,th[aria-sort="descending"] .tic
   grid-template-columns:repeat(2,minmax(0,1fr));
   grid-template-areas:"search clear" "companies status" "priority period";
  }
+ .ticket-list-card .filters.multi-filters>input#search{grid-column:1 / 2}
+ .ticket-list-card .filters.multi-filters>#clearTicketFilters{grid-column:2 / 3}
 }
 @media(max-width:560px){
  .ticket-list-card .filters.multi-filters{
   grid-template-columns:1fr;
   grid-template-areas:"search" "companies" "status" "priority" "period" "clear";
  }
+ .ticket-list-card .filters.multi-filters>input#search,
+ .ticket-list-card .filters.multi-filters>#clearTicketFilters{grid-column:1 / -1}
 }
