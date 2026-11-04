@@ -110,3 +110,13 @@ Na aba **Indicadores** (somente administradores), os filtros de **período, empr
 No painel **Usuários → Criar conta de teste**, informe apenas nome e perfil. O backend gera uma senha aleatória individual (forte), grava somente o hash bcrypt, ativa a conta imediatamente e exibe **login e senha uma única vez** para o administrador copiar. Não há envio de e-mail nem consulta ao Alterdata. A conta expira em sete dias e pode ser desativada antes do prazo. A opção **Nova senha** na listagem de usuários permite redefinir uma credencial temporária e invalida a anterior.
 
 Por segurança, **não** é utilizada uma senha compartilhada curta como `0000`: esta instalação é pública e permite contas de teste com perfil ADMIN. Um campo interno de e-mail no esquema legado recebe identificador não roteável `@example.invalid`, oculto na interface; o sistema não tenta enviar notificações para contas de teste. Senhas geradas não são incluídas em logs, e-mails ou no banco em texto claro.
+
+## Avaliações de atendimento e notas internas da equipe
+
+- Ao alterar um chamado para **Resolvido**, o analista pode informar a **Solução aplicada**. O sistema registra o texto no chamado e comunica ao solicitante no e-mail de atualização.
+- O solicitante encontra no menu **🔔 Avaliações pendentes** os chamados resolvidos ainda não avaliados, com assunto, responsável, tempo de execução e solução descrita. No detalhe, pode avaliar em três dimensões (1–5 estrelas): **atendimento, solução apresentada e prazo**, com comentário opcional. Uma única avaliação é aceita por chamado, apenas pelo próprio solicitante.
+- O **Dashboard do administrador** inclui quantidade e médias das avaliações, além das notas consolidadas por analista responsável principal, respeitando os filtros de empresa, categoria, analista e período.
+- No formulário de interação, analistas e administradores escolhem o destino: **Solicitante** (mensagem pública, com notificação por e-mail) ou **Equipe de TI** (nota interna, sem e-mail para o solicitante).
+- A visibilidade é protegida pela API e pelo banco: ao colaborador, as consultas do histórico e dos anexos ocultam notas internas, e o download direto desses anexos é negado. Mensagens anteriores à alteração ficam visíveis ao solicitante (valor padrão `SOLICITANTE`).
+- As mensagens internas ficam destacadas em tom âmbar para a equipe. O status e os demais registros operacionais permanecem no histórico, sem revelar mensagens marcadas como internas.
+- Contas de teste podem avaliar seus próprios chamados sem usar Brevo.
