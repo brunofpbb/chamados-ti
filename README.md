@@ -93,3 +93,14 @@ No projeto `Analista-DP`, o arquivo `backend/src/services/alterdataClient.js` co
 - O desempenho do analista considera o **responsável principal atual** de cada chamado aberto no período, inclusive se foi atribuído depois da abertura. Participantes compartilhados **não duplicam** volume ou resolução. A taxa de resolução é resolvidos / atribuídos; o tempo de primeira resposta considera a primeira mensagem de um analista ou administrador (não mudança de status).
 - A idade dos pendentes usa horas corridas, não SLA. A ausência de registro de primeira resposta ou resolução é exibida como travessão, não zero.
 - O design inclui cards separados com espaçamento consistente, formulário de atendimento organizado, equipe de apoio separada e e-mails em duas colunas (marca Turin à esquerda, central de serviços à direita).
+
+## Filtros do dashboard (empresa, analista e categoria)
+Na aba **Indicadores** (somente administradores), os filtros de **período, empresa, analista responsável e categoria** são independentes e cumulativos. Qualquer alteração recarrega todos os KPIs, gráficos, backlog e tabela de produtividade a partir do mesmo filtro SQL. O botão **Limpar filtros** retorna para os últimos 30 dias e todas as empresas, analistas e categorias.
+
+- **Empresa:** empresa de abertura do chamado (não a empresa de lotação do analista).
+- **Analista:** responsável principal atual; chamados sem responsável não entram quando se seleciona um analista específico.
+- **Categoria:** categoria registrada na abertura do chamado.
+- **Período:** data de abertura do chamado, inclusive na análise de desempenho.
+- Listas de seleção vêm dos registros existentes (empresas e categorias) e dos usuários ativos da TI; permanecem disponíveis mesmo que o filtro atual não tenha chamados.
+- O código da empresa é preservado e identificado por nome fantasia quando a API Alterdata permite carregar a lista de empresas.
+- Os indicadores de desempenho por analista não somam participantes compartilhados, evitando duplicação de resultados.
