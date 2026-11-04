@@ -145,21 +145,46 @@ const statusTitle=s=>({ABERTO:'Aberto',EM_ATENDIMENTO:'Em atendimento',AGUARDAND
 
 app.post('/api/tickets/:id/interaction',auth,ticketAccess,upload.array('files',5),safe(async(req,res)=>{
  const body=String(req.body?.body||'').trim(),visibility=String(req.body?.visibility||'SOLICITANTE');
+ const isStaff=req.user.role!=='COLABORADOR';
+ const awaitingReply=req.body?.awaitingReply==='true'||req.body?.awaitingReply===true;
  if(!body||body.length>5000)return res.status(400).json({erro:'Escreva uma mensagem'});
  if(!['SOLICITANTE','EQUIPE'].includes(visibility))return res.status(400).json({erro:'Destino da mensagem inválido'});
- if(visibility==='EQUIPE'&&req.user.role==='COLABORADOR')return res.status(403).json({erro:'Mensagens internas são exclusivas da equipe de TI'});
- if(['CANCELADO','RESOLVIDO'].includes(req.ticket.status))return res.status(409).json({erro:'Chamado encerrado'});
+ if(visibility==='EQUIPE'&&!isStaff)return res.status(403).json({erro:'Mensagens internas são exclusivas da equipe de TI'});
+ if(awaitingReply&&(!isStaff||visibility!=='SOLICITANTE'))return res.status(400).json({erro:'Aguardar resposta exige mensagem pública da equipe de TI'});
  const client=await pool.connect();
+ let oldStatus,nextStatus,reason;
  try{
- await client.query('BEGIN');
- const q=await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body,visibility) VALUES($1,$2,'MENSAGEM',$3,$4) RETURNING id",[req.params.id,req.user.id,body,visibility]);
- await saveAttachments(client,req.files,req.params.id,req.user.id,q.rows[0].id);
- await client.query('UPDATE chamados SET updated_at=now() WHERE id=$1',[req.params.id]);
- await client.query('COMMIT');
- }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
- if(visibility==='SOLICITANTE')notifyTicketParticipants(req.ticket.id,req.ticket.requester_id,'Nova interação no chamado #'+req.params.id,`<p>Uma nova mensagem foi registrada no chamado <strong>#${esc(req.params.id)}</strong>.</p><blockquote>${esc(body)}</blockquote><p>Acompanhe o histórico pelo portal.</p>`).catch(console.error);
- // Mensagens internas nunca são enviadas por e-mail ao solicitante.
- res.json({ok:true,visibility});
+  await client.query('BEGIN');
+  const lock=await client.query('SELECT status,requester_id,assignee_id FROM chamados WHERE id=$1 FOR UPDATE',[req.ticket.id]);
+  if(!lock.rowCount)throw Object.assign(new Error('Chamado não encontrado'),{status:404});
+  const t=lock.rows[0];oldStatus=t.status;nextStatus=oldStatus;
+  if(['CANCELADO','RESOLVIDO'].includes(oldStatus))throw Object.assign(new Error('Chamado encerrado'),{status:409});
+  if(!isStaff&&String(t.requester_id)!==String(req.user.id))throw Object.assign(new Error('Sem acesso'),{status:403});
+  if(visibility==='SOLICITANTE'){
+   if(isStaff){
+    if(awaitingReply && oldStatus!=='AGUARDANDO_USUARIO'){
+     nextStatus='AGUARDANDO_USUARIO';reason='Aguardando resposta do solicitante após mensagem da equipe de TI';
+    }else if(!awaitingReply && oldStatus==='AGUARDANDO_USUARIO'){
+     nextStatus='EM_ATENDIMENTO';reason='Equipe de TI retomou o atendimento sem solicitar resposta';
+    }
+   }else if(oldStatus==='AGUARDANDO_USUARIO'){
+    nextStatus=t.assignee_id?'EM_ATENDIMENTO':'ABERTO';
+    reason='Resposta recebida do solicitante';
+   }
+  }
+  const q=await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body,visibility) VALUES($1,$2,'MENSAGEM',$3,$4) RETURNING id",[req.ticket.id,req.user.id,body,visibility]);
+  await saveAttachments(client,req.files,req.ticket.id,req.user.id,q.rows[0].id);
+  if(nextStatus!==oldStatus){
+   await client.query('UPDATE chamados SET status=$1,updated_at=now() WHERE id=$2',[nextStatus,req.ticket.id]);
+   await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body,visibility) VALUES($1,$2,'ALTERACAO',$3,'SOLICITANTE')",[req.ticket.id,req.user.id,'Alteração automática: '+statusTitle(oldStatus)+' → '+statusTitle(nextStatus)+'. Motivo: '+reason+'.']);
+  }else await client.query('UPDATE chamados SET updated_at=now() WHERE id=$1',[req.ticket.id]);
+  await client.query('COMMIT');
+ }catch(e){await client.query('ROLLBACK');if(e.status)return res.status(e.status).json({erro:e.message});throw e;}finally{client.release();}
+ if(visibility==='SOLICITANTE'){
+  notifyTicketParticipants(req.ticket.id,req.ticket.requester_id,'Nova interação no chamado #'+req.ticket.id,`<p>Uma nova mensagem foi registrada no chamado <strong>#${esc(req.ticket.id)}</strong>.</p><blockquote>${esc(body)}</blockquote>${nextStatus!==oldStatus?'<p><strong>Nova situação:</strong> '+esc(statusTitle(nextStatus))+'</p>':''}<p>Acompanhe o histórico pelo portal.</p>`).catch(console.error);
+ }
+ // Nota interna: nunca notificar o solicitante nem alterar status.
+ res.json({ok:true,visibility,status:nextStatus,statusChanged:nextStatus!==oldStatus});
 }));
 app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{const t=req.ticket;const isManager=req.user.role!=='COLABORADOR';const status=String(req.body?.status||t.status);const resolutionSummary=String(req.body?.resolutionSummary??t.resolution_summary??'').trim();if(resolutionSummary.length>2000)return res.status(400).json({erro:'Solução deve ter até 2.000 caracteres'});const assignee=req.body?.assigneeId===null?null:req.body?.assigneeId===undefined?t.assignee_id:Number(req.body.assigneeId);if(!statuses.includes(status))return res.status(400).json({erro:'Status inválido'});if(!isManager&&(status!=='CANCELADO'||!['ABERTO','EM_ATENDIMENTO','AGUARDANDO_USUARIO'].includes(t.status)))return res.status(403).json({erro:'Só é permitido cancelar chamado em andamento'});if(t.status==='CANCELADO'||t.status==='RESOLVIDO')return res.status(409).json({erro:'Chamado encerrado'});if(isManager&&assignee!==null){const q=await pool.query("SELECT id FROM usuarios WHERE id=$1 AND role IN ('ANALISTA','ADMIN') AND enabled=true",[assignee]);if(!q.rowCount)return res.status(400).json({erro:'Analista inválido'});}const client=await pool.connect();try{await client.query('BEGIN');await client.query('UPDATE chamados SET status=$1,assignee_id=$2,updated_at=now(),resolved_at=CASE WHEN $1=\'RESOLVIDO\' THEN now() ELSE NULL END,resolution_summary=CASE WHEN $1=\'RESOLVIDO\' THEN $4 ELSE resolution_summary END WHERE id=$3',[status,isManager?assignee:t.assignee_id,t.id,resolutionSummary||null]);await client.query('INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,$3,$4)',[t.id,req.user.id,'ALTERACAO',`Status: ${t.status} → ${status}; responsável: ${isManager?assignee??'não atribuído':t.assignee_id??'não atribuído'}`]);await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}notifyTicketParticipants(t.id,t.requester_id,'Atualização do chamado #'+t.id,`<p>O chamado <strong>#${t.id}</strong> recebeu uma atualização.</p><p><b>Assunto:</b> ${esc(t.subject)}</p><p><b>Nova situação:</b> ${esc(statusTitle(status))}</p>${status==='RESOLVIDO'&&resolutionSummary?'<p><b>Solução aplicada:</b> '+esc(resolutionSummary)+'</p>':''}<p>Você pode acompanhar todas as etapas do atendimento no portal.</p>`).catch(console.error);res.json({ok:true});}));
 app.get('/api/notifications',auth,safe(async(req,res)=>{
