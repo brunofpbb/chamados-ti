@@ -218,13 +218,13 @@
 .ticket-filter-total{font-size:12px;color:#6e8072;padding:0 3px 9px}
 
 /* Combobox múltiplo com checkboxes de seleção simultânea. */
-.ticket-list-card .multi-filters{display:grid;grid-template-columns:minmax(180px,1.25fr) minmax(170px,1fr) minmax(170px,1fr) auto;gap:10px;align-items:start}
+.ticket-list-card .multi-filters{display:grid;grid-template-columns:minmax(180px,1.45fr) repeat(3,minmax(130px,1fr)) auto;gap:10px;align-items:start}
 .ticket-list-card .multi-filters>input{max-width:none;min-height:44px}
 .multi-filter{position:relative;min-width:0;max-width:100%}
 .multi-filter-summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;border:1px solid #d6e5da;border-radius:10px;background:#fff;padding:10px 13px;cursor:pointer;font-size:13px;color:#264530}
 .multi-filter-summary::-webkit-details-marker{display:none}
 .multi-filter-summary:focus-visible{outline:2px solid #005b28;outline-offset:2px}
-.multi-filter-chevron{color:#577160;font-size:18px;line-height:1}
+.multi-filter-chevron{display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;width:16px;height:16px;color:#55735c;transition:transform .15s ease}
 .multi-filter[open] .multi-filter-chevron{transform:rotate(180deg)}
 .multi-filter-options{position:absolute;left:0;right:0;top:calc(100% + 5px);max-height:290px;overflow-y:auto;z-index:30;border:1px solid #cbded1;background:#fff;border-radius:11px;box-shadow:0 12px 24px rgba(15,60,32,.14);padding:7px}
 .multi-filter-actions{display:flex;gap:8px;padding:5px 4px 9px;border-bottom:1px solid #e4eee6;margin-bottom:5px}
@@ -258,3 +258,7 @@
 .users-list-filters input:focus,.users-list-filters select:focus{border-color:#08743c;box-shadow:0 0 0 3px #08743c1a}
 @media(max-width:950px){.users-list-toolbar{flex-direction:column;align-items:stretch}.users-list-filters{flex:1 1 auto;grid-template-columns:1fr 1fr}}
 @media(max-width:600px){.users-list-filters{grid-template-columns:1fr}.users-list-toolbar h2{white-space:normal}}
+
+/* A mesma seta SVG é usada em todos os filtros múltiplos, sem glifo da fonte. */
+.multi-filter-summary .multi-filter-chevron svg{display:block;flex:none;width:16px;height:16px;stroke:currentColor}
+@media(min-width:1151px) and (max-width:1390px){.ticket-list-card .multi-filters{grid-template-columns:minmax(210px,1.3fr) repeat(3,minmax(118px,1fr)) auto;gap:8px}}
