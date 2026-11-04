@@ -140,3 +140,14 @@
 .ticket-list-card .table-wrap{overflow-x:auto;max-width:100%}
 .ticket-list-card table{min-width:960px}
 @media(max-width:1100px){.ticket-list-card table{min-width:930px}}
+
+/* Credenciais exibidas somente no momento da criacao ou redefinicao de contas de teste. */
+.test-credentials{margin:0 0 18px;border:1px solid #a4cdb1;background:#f3faf5}
+.test-credentials h3{font-size:18px;color:#075b2b;margin-bottom:8px}
+.test-credentials p{color:#526d5d;font-size:13px;line-height:1.6}
+.test-credential-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}
+.test-credential-fields>div{background:#fff;border:1px solid #d7e9dc;border-radius:10px;padding:12px;min-width:0}
+.test-credential-fields small{display:block;color:#657e6c;margin-bottom:7px}
+.test-credential-fields strong{display:block;font-size:15px;overflow-wrap:anywhere;color:#17432b}
+.test-credentials>button{margin-right:10px;margin-top:5px}
+@media(max-width:600px){.test-credential-fields{grid-template-columns:1fr}}
