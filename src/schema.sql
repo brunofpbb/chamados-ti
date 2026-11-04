@@ -59,6 +59,28 @@ CREATE TABLE IF NOT EXISTS chamados (
  resolved_at TIMESTAMPTZ
 );
 ALTER TABLE chamados ADD COLUMN IF NOT EXISTS resolution_summary TEXT;
+-- Prazo dos lembretes conta a partir da entrada no status Aguardando usuário,
+-- não da criação nem de alterações comuns do chamado.
+ALTER TABLE chamados ADD COLUMN IF NOT EXISTS waiting_since TIMESTAMPTZ;
+ALTER TABLE chamados ADD COLUMN IF NOT EXISTS waiting_cycle BIGINT NOT NULL DEFAULT 0;
+-- Chamados já aguardando na implantação iniciam um novo ciclo agora,
+-- evitando envios retroativos em massa.
+UPDATE chamados SET waiting_since=now(), waiting_cycle=waiting_cycle+1
+WHERE status='AGUARDANDO_USUARIO' AND waiting_since IS NULL;
+CREATE INDEX IF NOT EXISTS idx_chamados_aguardando_prazo
+ ON chamados(waiting_since) WHERE status='AGUARDANDO_USUARIO';
+
+CREATE TABLE IF NOT EXISTS lembretes_aguardando_usuario (
+ ticket_id BIGINT NOT NULL REFERENCES chamados(id) ON DELETE CASCADE,
+ waiting_cycle BIGINT NOT NULL,
+ stage_hours SMALLINT NOT NULL CHECK(stage_hours IN (24,48)),
+ recipient_email TEXT NOT NULL,
+ sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ PRIMARY KEY(ticket_id,waiting_cycle,stage_hours)
+);
+CREATE INDEX IF NOT EXISTS idx_lembretes_aguardando_enviados
+ ON lembretes_aguardando_usuario(sent_at DESC);
+
 CREATE TABLE IF NOT EXISTS interacoes (
  id BIGSERIAL PRIMARY KEY, ticket_id BIGINT NOT NULL REFERENCES chamados(id), author_id BIGINT NOT NULL REFERENCES usuarios(id),
  kind TEXT NOT NULL, body TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
