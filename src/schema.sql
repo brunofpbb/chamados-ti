@@ -62,6 +62,16 @@ CREATE TABLE IF NOT EXISTS interacoes (
  id BIGSERIAL PRIMARY KEY, ticket_id BIGINT NOT NULL REFERENCES chamados(id), author_id BIGINT NOT NULL REFERENCES usuarios(id),
  kind TEXT NOT NULL, body TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Compartilhamento: responsável continua único, colaboradores de TI adicionais podem acompanhar.
+CREATE TABLE IF NOT EXISTS chamados_compartilhados (
+ ticket_id BIGINT NOT NULL REFERENCES chamados(id) ON DELETE CASCADE,
+ user_id BIGINT NOT NULL REFERENCES usuarios(id),
+ added_by BIGINT NOT NULL REFERENCES usuarios(id),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ PRIMARY KEY(ticket_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_chamados_compartilhados_user ON chamados_compartilhados(user_id,ticket_id);
+
 CREATE TABLE IF NOT EXISTS anexos (
  id BIGSERIAL PRIMARY KEY, ticket_id BIGINT NOT NULL REFERENCES chamados(id), interaction_id BIGINT REFERENCES interacoes(id),
  filename TEXT NOT NULL, mime TEXT NOT NULL, data BYTEA NOT NULL, uploaded_by BIGINT NOT NULL REFERENCES usuarios(id),
