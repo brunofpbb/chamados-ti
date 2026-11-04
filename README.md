@@ -134,3 +134,16 @@ Regras aplicadas no servidor, **na mesma transação** que salva cada mensagem o
 - Resolução/cancelamento continuam explícitos, sem encerramento automático por inatividade.
 
 Mensagens e status são gravados atomicamente sob bloqueio da linha (`FOR UPDATE`), impedindo inconsistências em envios concorrentes. O backend valida o destino e a opção de aguardar resposta, independentemente do frontend. O histórico registra o motivo e a transição. O frontend atualiza o status após enviar a mensagem.
+
+## Lembretes automáticos — aguardando usuário (24h e 48h)
+
+O serviço web verifica lembretes pendentes a cada **15 minutos**, iniciando logo após conectar e migrar o banco. O relógio usa horas corridas desde o ingresso no status `AGUARDANDO_USUARIO` (`chamados.waiting_since`); a abertura do chamado ou uma nota interna não reinicia esse prazo.
+
+- **24h**: primeiro aviso ao e-mail cadastrado do solicitante. **48h**: segundo e último aviso do mesmo ciclo.
+- Se o serviço voltar após 48h sem envio anterior, envia apenas o de **48h**, evitando dois e-mails simultâneos.
+- Uma resposta ou mudança de status encerra o ciclo: os lembretes futuros deixam de ser elegíveis. Se o chamado voltar a `AGUARDANDO_USUARIO`, começa um novo ciclo (`waiting_cycle`).
+- Os registros de envio ficam em `lembretes_aguardando_usuario`, com chave única por chamado, ciclo e etapa. O processamento usa bloqueio de linha `FOR UPDATE SKIP LOCKED` para evitar duplicidade entre instâncias do Railway.
+- Somente destinatários ativos e não-testes recebem o e-mail; falhas de envio são registradas em logs e tentadas novamente no próximo ciclo de verificação. Não há cancelamento ou resolução automática.
+- O Brevo possui timeout de 20 segundos para não bloquear o processamento. Um erro muito raro entre aceitação do envio e confirmação no banco ainda pode causar reenvio, como ocorre em filas com entrega pelo menos uma vez.
+- Para pausar, definir `REMINDERS_ENABLED=false` no ambiente Railway e reiniciar. Por padrão permanece ativo.
+- Na primeira implantação, chamados que já estavam aguardando recebem `waiting_since=now()` para não disparar lembretes antigos em massa.
