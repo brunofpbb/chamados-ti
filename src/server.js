@@ -219,7 +219,7 @@ app.patch('/api/admin/users/:id',auth,admin,safe(async(req,res)=>{
 }));
 app.post('/api/admin/test-users',auth,admin,throttle,safe(async(req,res)=>{
  const name=String(req.body?.name||'').trim(),email=String(req.body?.email||'').trim().toLowerCase(),role=String(req.body?.role||'');
- if(name.length<3||name.length>120||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!['ADMIN','ANALISTA'].includes(role))
+ if(name.length<3||name.length>120||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!['ADMIN','ANALISTA','COLABORADOR'].includes(role))
    return res.status(400).json({erro:'Informe nome, e-mail válido e perfil de teste'});
  const client=await pool.connect();let user;
  try{
