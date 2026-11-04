@@ -304,3 +304,42 @@
 .attachment-reminder-back{align-self:center;border:0;background:transparent;color:#276a43;font-weight:700;font-size:12px;padding:9px;cursor:pointer}
 .attachment-reminder-back:hover{text-decoration:underline}
 @media(max-width:480px){.attachment-reminder-body{padding:22px 18px}.attachment-reminder-actions{grid-template-columns:1fr}.attachment-reminder-actions button{min-height:45px}}
+
+/* Navegação do Chamados TI: ícones vetoriais e tipografia uniforme. */
+.sidebar{min-width:0}
+.sidebar-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.sidebar-heading .brand{min-width:0;flex:1 1 auto;padding:8px 2px}
+.sidebar-heading .brand-image{display:block;width:100%;max-width:165px;height:auto;object-fit:contain}
+.desktop-sidebar-toggle{display:inline-flex;align-items:center;justify-content:center;flex:0 0 34px;width:34px;height:36px;border:1px solid #ffffff34;border-radius:9px;color:#e2f4e7;background:#ffffff12;cursor:pointer}
+.desktop-sidebar-toggle:hover,.desktop-sidebar-toggle:focus-visible{background:#ffffff2a;outline-offset:2px}
+.desktop-sidebar-toggle svg{width:19px;height:19px}
+.sidebar .navs{display:flex;flex-direction:column;gap:4px;min-width:0}
+.sidebar .nav,.sidebar .nav[data-go="notifications"],.sidebar .shared-nav{display:flex;align-items:center;gap:12px;width:100%;min-width:0;min-height:45px;padding:11px 12px;margin:0;text-align:left;line-height:1.35;font-size:14px;font-weight:500;letter-spacing:0;white-space:normal}
+.sidebar .nav.active{font-weight:650}
+.sidebar .nav-icon{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:0 0 20px;color:inherit}
+.sidebar .nav-icon svg{display:block;width:19px;height:19px}
+.sidebar .nav-label{min-width:0;flex:1 1 auto;overflow-wrap:break-word}
+.sidebar .nav-count,.sidebar .shared-nav-count,.sidebar .nav[data-go="notifications"] .nav-count{flex:0 0 auto;margin-left:auto;font-size:10px}
+.sidebar .side-bottom .nav{margin-top:12px}
+@media(min-width:761px){
+ .layout .sidebar{transition:flex-basis .18s ease,width .18s ease,padding .18s ease}
+ .layout.sidebar-collapsed .sidebar{width:72px;flex:0 0 72px;padding:19px 10px;gap:15px}
+ .layout.sidebar-collapsed .sidebar-heading{justify-content:center}
+ .layout.sidebar-collapsed .sidebar-heading .brand{display:none}
+ .layout.sidebar-collapsed .desktop-sidebar-toggle{width:44px;height:44px;flex:0 0 44px}
+ .layout.sidebar-collapsed .sidebar .nav,.layout.sidebar-collapsed .sidebar .nav[data-go="notifications"],.layout.sidebar-collapsed .sidebar .shared-nav{width:52px;min-width:0;height:48px;min-height:48px;padding:0;justify-content:center;gap:0;margin:0;position:relative}
+ .layout.sidebar-collapsed .sidebar .nav-label{display:none}
+ .layout.sidebar-collapsed .sidebar .nav-icon{flex:0 0 22px;width:22px;height:22px}
+ .layout.sidebar-collapsed .sidebar .nav-count,.layout.sidebar-collapsed .sidebar .shared-nav-count,.layout.sidebar-collapsed .sidebar .nav[data-go="notifications"] .nav-count{position:absolute;top:1px;right:0;min-width:16px;height:16px;line-height:16px;padding:0 3px;margin:0;font-size:9px;border:1px solid #005b28}
+ .layout.sidebar-collapsed .sidebar .side-bottom{padding-top:12px}
+ .layout.sidebar-collapsed .sidebar .side-bottom>div{display:none}
+ .layout.sidebar-collapsed .sidebar .side-bottom #logout{margin-top:0}
+}
+@media(max-width:760px){
+ .desktop-sidebar-toggle{display:none!important}
+ .sidebar-heading{display:block}
+ .sidebar-heading .brand{display:flex}
+ .sidebar .nav,.sidebar .nav[data-go="notifications"],.sidebar .shared-nav{font-size:14px!important;gap:11px!important;min-height:46px!important}
+ .sidebar .nav-icon{flex:0 0 20px}
+}
+@media(prefers-reduced-motion:reduce){.layout .sidebar{transition:none!important}}
