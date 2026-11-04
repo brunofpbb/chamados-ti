@@ -109,7 +109,7 @@ async function ticketAccess(req,res,next){try{const q=await pool.query(listSql+'
 app.get('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{const isStaff=req.user.role!=='COLABORADOR';
  const i=await pool.query("SELECT i.id,i.author_id,i.kind,i.body,i.visibility,i.created_at,u.name AS author FROM interacoes i JOIN usuarios u ON u.id=i.author_id WHERE i.ticket_id=$1 AND ($2::boolean OR i.visibility='SOLICITANTE') ORDER BY i.created_at,i.id",[req.params.id,isStaff]);
  const a=await pool.query("SELECT a.id,a.interaction_id,a.filename,a.mime,a.created_at FROM anexos a LEFT JOIN interacoes i ON i.id=a.interaction_id WHERE a.ticket_id=$1 AND ($2::boolean OR a.interaction_id IS NULL OR i.visibility='SOLICITANTE') ORDER BY a.id",[req.params.id,isStaff]);const shared=await pool.query('SELECT u.id,u.name,u.role,c.created_at FROM chamados_compartilhados c JOIN usuarios u ON u.id=c.user_id WHERE c.ticket_id=$1 ORDER BY u.name',[req.params.id]);const review=await pool.query('SELECT rating,solution_rating,time_rating,comment,created_at FROM avaliacoes_chamados WHERE ticket_id=$1',[req.params.id]);
- res.json({ticket:req.ticket,interactions:i.rows,attachments:a.rows,shared:isStaff?shared.rows:[],review:review.rows[0]||null});}));
+ res.json({ticket:{...req.ticket,shared_with_me:shared.rows.some(u=>String(u.id)===String(req.user.id))},interactions:i.rows,attachments:a.rows,shared:isStaff?shared.rows:[],review:review.rows[0]||null});}));
 app.post('/api/tickets/:id/share',auth,manager,ticketAccess,safe(async(req,res)=>{
  const ticket=req.ticket;
  if(['CANCELADO','RESOLVIDO'].includes(ticket.status))return res.status(409).json({erro:'Chamado encerrado'});
