@@ -236,3 +236,9 @@
 .clear-ticket-filters{white-space:nowrap;min-height:44px}
 @media(max-width:1150px){.ticket-list-card .multi-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.ticket-list-card .multi-filters>input{grid-column:1/-1}}
 @media(max-width:760px){.ticket-list-card .multi-filters{grid-template-columns:minmax(0,1fr)}.ticket-list-card .multi-filters>input{grid-column:auto}.multi-filter-options{position:static;max-height:240px;margin-top:5px;box-shadow:none}.ticket-list-card .multi-filter{max-width:none}}
+
+/* Especificidade: não aplicar o estilo de campo de texto aos checkboxes. */
+.ticket-list-card .multi-filters .multi-filter-option input[type="checkbox"]{box-sizing:content-box!important;display:block!important;flex:0 0 16px!important;min-width:16px!important;max-width:16px!important;width:16px!important;height:16px!important;padding:0!important;border:0!important;border-radius:3px!important;background:transparent!important;box-shadow:none!important}
+.ticket-list-card .multi-filters .multi-filter-option{font-weight:500}
+.ticket-list-card .multi-filter-options{overflow-x:hidden}
+.ticket-list-card .multi-filter-actions button{min-width:0}
