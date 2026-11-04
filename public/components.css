@@ -27,3 +27,54 @@
 .file-picker-count.file-error{color:#ba3030;font-weight:700}
 @media(max-width:1000px){.users-summary{grid-template-columns:repeat(3,minmax(0,1fr))}.users-table{min-width:810px}}
 @media(max-width:760px){.users-summary{grid-template-columns:1fr 1fr;gap:9px}.users-summary .card{padding:14px}.users-summary .card strong{font-size:24px}.file-picker{align-items:stretch}.file-picker-button{width:100%}.file-picker-count{width:100%}}
+
+/* Chamados - espaçamento consistente e painel de atendimento */
+.main{min-width:0}
+.card{min-width:0}
+.ticket-layout{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(300px,.9fr);align-items:start;gap:22px;margin-top:26px}
+.ticket-main,.ticket-aside{min-width:0;display:flex;flex-direction:column;gap:22px}
+.ticket-section{margin:0!important}
+.ticket-section>h2{margin:0 0 20px}
+.ticket-section .ticket-heading{margin-bottom:22px}
+.ticket-description{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;margin:8px 0 16px}
+.ticket-meta{margin:16px 0 0}
+.ticket-section .timeline{margin-bottom:15px}
+.ticket-manage-form{border-top:1px solid #e1ece5;margin-top:24px;padding-top:20px;display:flex;flex-direction:column;gap:15px}
+.ticket-manage-form h3{margin:0;font-size:15px;color:#173b27}
+.ticket-manage-form .btnrow{margin:2px 0 0}
+.attendee{padding:14px 0;border-bottom:1px solid #e5eee7;display:flex;flex-direction:column;gap:5px}
+.attendee:first-of-type{padding-top:3px}
+.attendee-label{font-size:12px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:#6b8073}
+.attendee-name{font-size:15px;line-height:1.45;color:#1f3829;overflow-wrap:anywhere}
+.attendee small{font-size:12px;color:#87988c}
+.ticket-section .field{gap:8px}
+.ticket-section .btnrow{margin-top:10px}
+.ticket-section .muted{line-height:1.6}
+.reply-field{margin-top:20px}
+.shared-team{display:flex;flex-direction:column;gap:10px;margin:15px 0}
+.shared-person{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;border:1px solid #e2ece5;border-radius:10px}
+.shared-person strong{display:block;font-size:13px;overflow-wrap:anywhere}
+.shared-person small{display:block;color:#6d8072;margin-top:4px;font-size:11px}
+.shared-person button{flex-shrink:0}
+.share-form{border-top:1px solid #e6eee8;padding-top:17px;margin-top:18px;display:flex;flex-direction:column;gap:12px}
+.share-form button{align-self:flex-start}
+.dashboard-toolbar{display:flex;align-items:end;justify-content:space-between;gap:20px;margin:12px 0 20px}
+.dashboard-toolbar .field{min-width:210px}
+.dashboard-toolbar p{max-width:520px;margin:0;font-size:12px;line-height:1.6}
+.dashboard-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin-bottom:22px}
+.dashboard-kpis .metric{min-width:0}
+.dashboard-kpis .metric .num{overflow-wrap:anywhere}
+.dashboard-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:22px;margin-bottom:22px}
+.dashboard-columns>.card{margin:0;min-width:0}
+.dashboard-section{margin:0 0 22px}
+.dashboard-section .table-wrap{max-width:100%}
+.analyst-table{min-width:850px}
+.analyst-table th,.analyst-table td{padding:14px 12px}
+.dashboard-note{font-size:12px;color:#6e8173;line-height:1.7;margin:17px 0 0}
+.aging-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.aging-grid>div{background:#f4f9f5;border:1px solid #e1ede4;border-radius:12px;padding:18px 12px;text-align:center}
+.aging-grid strong{display:block;font-size:28px;color:#005b28}
+.aging-grid span{display:block;color:#536b59;font-size:12px;margin-top:5px}
+@media(max-width:1150px){.ticket-layout{grid-template-columns:minmax(0,1.4fr) minmax(275px,.9fr)}.dashboard-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:850px){.ticket-layout{grid-template-columns:1fr}.dashboard-columns{grid-template-columns:1fr}.dashboard-toolbar{align-items:stretch;flex-direction:column}.dashboard-toolbar .field{min-width:0}}
+@media(max-width:550px){.dashboard-kpis{gap:10px}.dashboard-kpis .card{padding:14px}.dashboard-kpis .metric .num{font-size:25px}.aging-grid{gap:5px}.aging-grid>div{padding:12px 6px}.aging-grid strong{font-size:23px}}
