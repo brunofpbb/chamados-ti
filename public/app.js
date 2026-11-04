@@ -77,8 +77,8 @@ function sharedPage(){
 function home(){
  const pending=me.role!=='COLABORADOR'?sharedTickets().filter(t=>!['RESOLVIDO','CANCELADO'].includes(t.status)):[];
  return header(`Olá, ${esc(me.name.split(' ')[0])}! 👋`,'Acompanhe suas solicitações de suporte.',`<button class="primary" data-go="new">＋ Novo chamado</button>`)+
- (pending.length?`<section class="card shared-home-card"><div class="sectionhead"><div><h2>Compartilhados com você <span class="shared-heading-count">${pending.length}</span></h2><p class="muted">Você foi incluído como apoio nestes atendimentos.</p></div><button class="secondary" data-go="shared">Ver todos</button></div>${table(pending.slice(0,5))}</section>`:'')+
  metrics()+
+ (pending.length?`<section class="card shared-home-card"><div class="sectionhead"><div><h2>Compartilhados com você <span class="shared-heading-count">${pending.length}</span></h2><p class="muted">Você foi incluído como apoio nestes atendimentos.</p></div><button class="secondary" data-go="shared">Ver todos</button></div>${table(pending.slice(0,5))}</section>`:'')+
  `<div class="card"><div class="sectionhead"><h2>Chamados recentes</h2><button class="secondary" data-go="tickets">Ver todos</button></div>${table(tickets.slice(0,8))}</div>`;
 }
 function ticketsPage(){
