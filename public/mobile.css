@@ -86,3 +86,20 @@
 }
 @media(min-width:761px){.mobile-backdrop,.mobile-header,.mobile-drawer-heading{display:none!important}}
 @media(prefers-reduced-motion:reduce){.sidebar{transition:none!important}}
+
+/* Detalhes do chamado: cards auxiliares recolhidos no celular. */
+.mobile-ticket-panel-toggle{display:none}
+@media(max-width:760px){
+ .ticket-layout{min-width:0;grid-template-columns:minmax(0,1fr)!important}
+ .ticket-main,.ticket-aside,.ticket-section,.filelist{min-width:0;max-width:100%}
+ .mobile-ticket-panel-toggle{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:44px;margin:0;padding:11px 14px;font-size:13px;font-weight:700;color:#005b28;border:1px solid #bfd8c7;border-radius:10px;background:#f6faf7;grid-column:1/-1}
+ .mobile-ticket-panel-toggle span{font-size:20px;line-height:1}
+ .ticket-layout .ticket-aside{display:none!important}
+ .ticket-layout.ticket-aside-expanded .ticket-aside{display:flex!important}
+}
+/* Nomes grandes não podem forçar a largura do card ou da página. */
+.ticket-section .filelist{display:flex;flex-direction:column;align-items:stretch;gap:9px;min-width:0;max-width:100%;width:100%}
+.ticket-section .filelist>.filelink{display:flex;align-items:center;gap:7px;box-sizing:border-box;max-width:100%;min-width:0;width:100%;overflow:hidden;white-space:nowrap;padding:10px 12px}
+.ticket-section .filelink>span:first-child{flex:0 0 auto}
+.ticket-section .filelink-name{display:block;flex:1 1 auto;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ticket-main .card{min-width:0;max-width:100%}
