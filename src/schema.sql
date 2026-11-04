@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS chamados (
  assignee_id BIGINT REFERENCES usuarios(id), created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  resolved_at TIMESTAMPTZ
 );
+ALTER TABLE chamados ADD COLUMN IF NOT EXISTS resolution_summary TEXT;
 CREATE TABLE IF NOT EXISTS interacoes (
  id BIGSERIAL PRIMARY KEY, ticket_id BIGINT NOT NULL REFERENCES chamados(id), author_id BIGINT NOT NULL REFERENCES usuarios(id),
  kind TEXT NOT NULL, body TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
