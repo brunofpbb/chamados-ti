@@ -284,3 +284,23 @@
  .shared-home-card .sectionhead button{flex-shrink:0}
  .shared-home-card,.shared-list-card{padding:15px}
 }
+
+/* A categoria permanece em sua própria linha; a prioridade sempre vem abaixo. */
+.ticket-subtitle{display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:5px!important;margin-top:5px}
+.ticket-subtitle .ticket-category{display:block;line-height:1.4}
+.ticket-priority-line{display:flex;align-items:center;flex-wrap:wrap;gap:7px;min-width:0}
+.ticket-company{overflow-wrap:anywhere}
+
+/* Confirmação acessível e opcional de anexos antes de abrir o chamado. */
+.attachment-reminder{width:min(460px,calc(100vw - 30px));max-width:460px;max-height:calc(100dvh - 38px);overflow:auto;box-sizing:border-box;padding:0;border:1px solid #cfe4d4;border-radius:17px;background:#fff;color:#173b28;box-shadow:0 18px 54px rgba(3,37,18,.24)}
+.attachment-reminder::backdrop{background:rgba(0,26,12,.58);backdrop-filter:blur(2px)}
+.attachment-reminder-body{padding:28px;display:flex;flex-direction:column;align-items:stretch;gap:13px}
+.attachment-reminder-icon{display:flex;align-items:center;justify-content:center;width:51px;height:51px;border-radius:13px;background:#e5f5e9;font-size:25px}
+.attachment-reminder h2{font-size:23px;line-height:1.25;color:#064b25;margin:0}
+.attachment-reminder p{font-size:14px;line-height:1.6;color:#425c49;margin:0}
+.attachment-reminder .attachment-reminder-note{font-size:12px;color:#687e6d;background:#f5faf6;border-radius:8px;padding:10px 12px}
+.attachment-reminder-actions{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin-top:6px}
+.attachment-reminder-actions button{min-width:0;width:100%;padding:12px 10px;font-size:13px;white-space:normal}
+.attachment-reminder-back{align-self:center;border:0;background:transparent;color:#276a43;font-weight:700;font-size:12px;padding:9px;cursor:pointer}
+.attachment-reminder-back:hover{text-decoration:underline}
+@media(max-width:480px){.attachment-reminder-body{padding:22px 18px}.attachment-reminder-actions{grid-template-columns:1fr}.attachment-reminder-actions button{min-height:45px}}
