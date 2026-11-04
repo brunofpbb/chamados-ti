@@ -186,7 +186,45 @@ app.post('/api/tickets/:id/interaction',auth,ticketAccess,upload.array('files',5
  // Nota interna: nunca notificar o solicitante nem alterar status.
  res.json({ok:true,visibility,status:nextStatus,statusChanged:nextStatus!==oldStatus});
 }));
-app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{const t=req.ticket;const isManager=req.user.role!=='COLABORADOR';const status=String(req.body?.status||t.status);const resolutionSummary=String(req.body?.resolutionSummary??t.resolution_summary??'').trim();if(resolutionSummary.length>2000)return res.status(400).json({erro:'Solução deve ter até 2.000 caracteres'});const assignee=req.body?.assigneeId===null?null:req.body?.assigneeId===undefined?t.assignee_id:Number(req.body.assigneeId);if(!statuses.includes(status))return res.status(400).json({erro:'Status inválido'});if(!isManager&&(status!=='CANCELADO'||!['ABERTO','EM_ATENDIMENTO','AGUARDANDO_USUARIO'].includes(t.status)))return res.status(403).json({erro:'Só é permitido cancelar chamado em andamento'});if(t.status==='CANCELADO'||t.status==='RESOLVIDO')return res.status(409).json({erro:'Chamado encerrado'});if(isManager&&assignee!==null){const q=await pool.query("SELECT id FROM usuarios WHERE id=$1 AND role IN ('ANALISTA','ADMIN') AND enabled=true",[assignee]);if(!q.rowCount)return res.status(400).json({erro:'Analista inválido'});}const client=await pool.connect();try{await client.query('BEGIN');await client.query('UPDATE chamados SET status=$1,assignee_id=$2,updated_at=now(),resolved_at=CASE WHEN $1=\'RESOLVIDO\' THEN now() ELSE NULL END,resolution_summary=CASE WHEN $1=\'RESOLVIDO\' THEN $4 ELSE resolution_summary END WHERE id=$3',[status,isManager?assignee:t.assignee_id,t.id,resolutionSummary||null]);await client.query('INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,$3,$4)',[t.id,req.user.id,'ALTERACAO',`Status: ${t.status} → ${status}; responsável: ${isManager?assignee??'não atribuído':t.assignee_id??'não atribuído'}`]);await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}notifyTicketParticipants(t.id,t.requester_id,'Atualização do chamado #'+t.id,`<p>O chamado <strong>#${t.id}</strong> recebeu uma atualização.</p><p><b>Assunto:</b> ${esc(t.subject)}</p><p><b>Nova situação:</b> ${esc(statusTitle(status))}</p>${status==='RESOLVIDO'&&resolutionSummary?'<p><b>Solução aplicada:</b> '+esc(resolutionSummary)+'</p>':''}<p>Você pode acompanhar todas as etapas do atendimento no portal.</p>`).catch(console.error);res.json({ok:true});}));
+app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{
+ const isManager=req.user.role!=='COLABORADOR',t=req.ticket;
+ const requestedStatus=String(req.body?.status||t.status);
+ const resolutionSummary=String(req.body?.resolutionSummary??t.resolution_summary??'').trim();
+ if(resolutionSummary.length>2000)return res.status(400).json({erro:'Solução deve ter até 2.000 caracteres'});
+ if(!statuses.includes(requestedStatus))return res.status(400).json({erro:'Status inválido'});
+ const assignee=req.body?.assigneeId===null?null:req.body?.assigneeId===undefined?t.assignee_id:Number(req.body.assigneeId);
+ if(assignee!==null&&(!Number.isSafeInteger(assignee)||assignee<1))return res.status(400).json({erro:'Analista inválido'});
+ if(!isManager&&(requestedStatus!=='CANCELADO'||!['ABERTO','EM_ATENDIMENTO','AGUARDANDO_USUARIO'].includes(t.status)))return res.status(403).json({erro:'Só é permitido cancelar chamado em andamento'});
+ if(isManager&&assignee!==null){
+  const q=await pool.query("SELECT id FROM usuarios WHERE id=$1 AND role IN ('ANALISTA','ADMIN') AND enabled=true AND (is_test=false OR test_expires_at>now())",[assignee]);
+  if(!q.rowCount)return res.status(400).json({erro:'Analista inválido'});
+ }
+ const client=await pool.connect();let nextStatus,oldStatus,changed=false;
+ try{
+  await client.query('BEGIN');
+  const locked=await client.query('SELECT status,assignee_id,requester_id FROM chamados WHERE id=$1 FOR UPDATE',[t.id]);
+  if(!locked.rowCount)throw Object.assign(new Error('Chamado não encontrado'),{status:404});
+  const current=locked.rows[0];oldStatus=current.status;
+  if(['CANCELADO','RESOLVIDO'].includes(oldStatus))throw Object.assign(new Error('Chamado encerrado'),{status:409});
+  if(!isManager&&String(current.requester_id)!==String(req.user.id))throw Object.assign(new Error('Sem acesso'),{status:403});
+  const actualAssignee=isManager?assignee:current.assignee_id;
+  nextStatus=requestedStatus;
+  // Atribuir um chamado aberto assume o atendimento, sem sobrescrever outro status escolhido.
+  const automaticallyAssumed=isManager&&oldStatus==='ABERTO'&&requestedStatus==='ABERTO'&&actualAssignee!==null&&String(actualAssignee)!==String(current.assignee_id);
+  if(automaticallyAssumed)nextStatus='EM_ATENDIMENTO';
+  changed=nextStatus!==oldStatus||String(actualAssignee??'')!==String(current.assignee_id??'');
+  if(changed){
+   await client.query("UPDATE chamados SET status=$1,assignee_id=$2,updated_at=now(),resolved_at=CASE WHEN $1='RESOLVIDO' THEN now() ELSE NULL END,resolution_summary=CASE WHEN $1='RESOLVIDO' THEN $4 ELSE resolution_summary END WHERE id=$3",[nextStatus,actualAssignee,t.id,resolutionSummary||null]);
+   const message=automaticallyAssumed?
+    'Alteração automática: Aberto → Em atendimento. Motivo: chamado atribuído a um analista.':
+    'Alteração de atendimento: '+statusTitle(oldStatus)+' → '+statusTitle(nextStatus)+'; responsável: '+(current.assignee_id??'não atribuído')+' → '+(actualAssignee??'não atribuído');
+   await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,'ALTERACAO',$3)",[t.id,req.user.id,message]);
+  }
+  await client.query('COMMIT');
+ }catch(e){await client.query('ROLLBACK');if(e.status)return res.status(e.status).json({erro:e.message});throw e;}finally{client.release();}
+ if(changed)notifyTicketParticipants(t.id,t.requester_id,'Atualização do chamado #'+t.id,`<p>O chamado <strong>#${t.id}</strong> recebeu uma atualização.</p><p><b>Assunto:</b> ${esc(t.subject)}</p><p><b>Nova situação:</b> ${esc(statusTitle(nextStatus))}</p>${nextStatus==='RESOLVIDO'&&resolutionSummary?'<p><b>Solução aplicada:</b> '+esc(resolutionSummary)+'</p>':''}<p>Você pode acompanhar todas as etapas do atendimento no portal.</p>`).catch(console.error);
+ res.json({ok:true,status:nextStatus,statusChanged:nextStatus!==oldStatus});
+}));
 app.get('/api/notifications',auth,safe(async(req,res)=>{
  // Pendências seguem o solicitante do chamado, independentemente do perfil do usuário.
  const q=await pool.query("SELECT t.id,t.subject,t.resolved_at,t.resolution_summary,t.assignee_id,a.name AS assignee_name,round((extract(epoch FROM(t.resolved_at-t.created_at))/3600)::numeric,1) AS duration_hours FROM chamados t LEFT JOIN avaliacoes_chamados v ON v.ticket_id=t.id LEFT JOIN usuarios a ON a.id=t.assignee_id WHERE t.requester_id=$1 AND t.status='RESOLVIDO' AND v.ticket_id IS NULL ORDER BY t.resolved_at DESC LIMIT 30",[req.user.id]);
