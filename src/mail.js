@@ -16,7 +16,7 @@ async function send(to,subject,html){
  const from=process.env.MAIL_FROM||process.env.BREVO_FROM_EMAIL;
  const name=process.env.MAIL_FROM_NAME||process.env.BREVO_FROM_NAME||'Turin Transportes';
  if(!process.env.BREVO_API_KEY||!from)throw Error('Brevo não configurado: informe BREVO_API_KEY e BREVO_FROM_EMAIL');
- const r=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':process.env.BREVO_API_KEY,'content-type':'application/json'},body:JSON.stringify({sender:{name,email:from},to:[{email:to}],subject,htmlContent:template(subject,html)})});
+ const r=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',signal:AbortSignal.timeout(20000),headers:{'api-key':process.env.BREVO_API_KEY,'content-type':'application/json'},body:JSON.stringify({sender:{name,email:from},to:[{email:to}],subject,htmlContent:template(subject,html)})});
  if(!r.ok)throw Error('Brevo erro '+r.status);return r.json();
 }
 module.exports={send,esc,template};
