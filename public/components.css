@@ -179,3 +179,9 @@
 .solution-summary p{margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
 #resolutionField[hidden]{display:none}
 @media(max-width:650px){.review-meta{flex-direction:column}.nav-count{margin-left:8px}}
+
+.dashboard-review-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px;margin:0 0 22px}
+.dashboard-review-kpis .card{padding:17px 20px;min-width:0}
+.dashboard-review-kpis strong{font-size:26px;color:#005b28;display:block;margin-top:8px}
+@media(max-width:900px){.dashboard-review-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.dashboard-review-kpis{gap:9px}.dashboard-review-kpis .card{padding:12px}.dashboard-review-kpis strong{font-size:20px}}
