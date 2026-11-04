@@ -139,8 +139,14 @@ app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
  const period=String(req.query.period||'30');
  if(!Object.hasOwn(options,period))return res.status(400).json({erro:'Período inválido'});
  const days=options[period];
- const where="($1::int IS NULL OR t.created_at >= now() - ($1::int * interval '1 day'))";
- const [overall,statuses,daily,units,categories,priorities,analysts,aging]=await Promise.all([
+ const company=String(req.query.company||'').trim(),category=String(req.query.category||'').trim();
+ const analystRaw=String(req.query.analyst||'').trim();
+ if(company.length>80||category.length>120||analystRaw.length>20||(analystRaw&&!/^[1-9]\d*$/.test(analystRaw)))return res.status(400).json({erro:'Filtro inválido'});
+ const analyst=analystRaw?Number(analystRaw):null;
+ if(analyst!==null&&!Number.isSafeInteger(analyst))return res.status(400).json({erro:'Analista inválido'});
+ const params=[days,company||null,analyst,category||null];
+ const where="($1::int IS NULL OR t.created_at >= now() - ($1::int * interval '1 day')) AND ($2::text IS NULL OR t.company_code=$2) AND ($3::bigint IS NULL OR t.assignee_id=$3) AND ($4::text IS NULL OR t.category=$4)";
+ const [overall,statuses,daily,units,categories,priorities,analysts,aging,filterOptions]=await Promise.all([
   pool.query(`SELECT count(*)::int total,count(*) FILTER(WHERE t.status='RESOLVIDO')::int resolved,
    count(*) FILTER(WHERE t.status='CANCELADO')::int cancelled,
    count(*) FILTER(WHERE t.status='ABERTO')::int open,
@@ -148,15 +154,15 @@ app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
    count(*) FILTER(WHERE t.status='AGUARDANDO_USUARIO')::int waiting,
    count(*) FILTER(WHERE t.assignee_id IS NULL AND t.status NOT IN ('CANCELADO','RESOLVIDO'))::int unassigned,
    round((avg(extract(epoch FROM(t.resolved_at-t.created_at))/3600) FILTER(WHERE t.resolved_at IS NOT NULL))::numeric,1) avg_resolution_hours
-   FROM chamados t WHERE ${where}`,[days]),
-  pool.query(`SELECT status,count(*)::int total FROM chamados t WHERE ${where} GROUP BY status ORDER BY total DESC`,[days]),
+   FROM chamados t WHERE ${where}`,[...params]),
+  pool.query(`SELECT status,count(*)::int total FROM chamados t WHERE ${where} GROUP BY status ORDER BY total DESC`,[...params]),
   pool.query(`SELECT to_char(t.created_at AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS day,
    count(*)::int total,count(*) FILTER(WHERE t.status='RESOLVIDO')::int resolved
-   FROM chamados t WHERE ${where} GROUP BY 1 ORDER BY 1`,[days]),
+   FROM chamados t WHERE ${where} GROUP BY 1 ORDER BY 1`,[...params]),
   pool.query(`SELECT t.company_code,count(*)::int total,count(*) FILTER(WHERE t.status='RESOLVIDO')::int resolved
-   FROM chamados t WHERE ${where} GROUP BY t.company_code ORDER BY total DESC`,[days]),
-  pool.query(`SELECT t.category,count(*)::int total FROM chamados t WHERE ${where} GROUP BY t.category ORDER BY total DESC`,[days]),
-  pool.query(`SELECT t.urgency,count(*)::int total FROM chamados t WHERE ${where} GROUP BY t.urgency ORDER BY total DESC`,[days]),
+   FROM chamados t WHERE ${where} GROUP BY t.company_code ORDER BY total DESC`,[...params]),
+  pool.query(`SELECT t.category,count(*)::int total FROM chamados t WHERE ${where} GROUP BY t.category ORDER BY total DESC`,[...params]),
+  pool.query(`SELECT t.urgency,count(*)::int total FROM chamados t WHERE ${where} GROUP BY t.urgency ORDER BY total DESC`,[...params]),
   pool.query(`SELECT u.id,u.name,u.company_code,u.role,
    count(t.id)::int total_assigned,
    count(t.id) FILTER (WHERE t.status='RESOLVIDO')::int resolved,
@@ -171,15 +177,19 @@ app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
       WHERE i.ticket_id=t.id AND i.kind='MENSAGEM' AND author.role IN ('ADMIN','ANALISTA')
         AND i.author_id<>t.requester_id
    ) fr ON true
-   WHERE u.role IN ('ADMIN','ANALISTA')
+   WHERE u.role IN ('ADMIN','ANALISTA') AND ($3::bigint IS NULL OR u.id=$3)
    GROUP BY u.id,u.name,u.company_code,u.role
-   ORDER BY resolved DESC,total_assigned DESC,u.name`,[days]),
+   ORDER BY resolved DESC,total_assigned DESC,u.name`,[...params]),
   pool.query(`SELECT count(*) FILTER(WHERE t.status NOT IN ('RESOLVIDO','CANCELADO') AND t.created_at<now()-interval '24 hours')::int older_24h,
     count(*) FILTER(WHERE t.status NOT IN ('RESOLVIDO','CANCELADO') AND t.created_at<now()-interval '48 hours')::int older_48h,
     count(*) FILTER(WHERE t.status NOT IN ('RESOLVIDO','CANCELADO') AND t.created_at<now()-interval '7 days')::int older_7d
-    FROM chamados t WHERE ${where}`,[days])
+    FROM chamados t WHERE ${where}`,[...params]),
+  pool.query(`SELECT
+   (SELECT coalesce(json_agg(c ORDER BY c),'[]'::json) FROM (SELECT DISTINCT company_code AS c FROM chamados) companies) AS companies,
+   (SELECT coalesce(json_agg(cat ORDER BY cat),'[]'::json) FROM (SELECT DISTINCT category AS cat FROM chamados) categories) AS categories,
+   (SELECT coalesce(json_agg(json_build_object('id',id,'name',name,'company_code',company_code) ORDER BY name),'[]'::json) FROM usuarios WHERE role IN ('ADMIN','ANALISTA') AND enabled=true AND (is_test=false OR test_expires_at>now())) AS analysts`)
  ]);
- res.json({period,overview:overall.rows[0],statuses:statuses.rows,daily:daily.rows,
+ res.json({period,filters:{company,analyst:analystRaw,category},filterOptions:filterOptions.rows[0],overview:overall.rows[0],statuses:statuses.rows,daily:daily.rows,
    units:units.rows,categories:categories.rows,priorities:priorities.rows,
    analysts:analysts.rows,aging:aging.rows[0]});
 }));
