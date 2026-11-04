@@ -120,3 +120,17 @@ Por segurança, **não** é utilizada uma senha compartilhada curta como `0000`:
 - A visibilidade é protegida pela API e pelo banco: ao colaborador, as consultas do histórico e dos anexos ocultam notas internas, e o download direto desses anexos é negado. Mensagens anteriores à alteração ficam visíveis ao solicitante (valor padrão `SOLICITANTE`).
 - As mensagens internas ficam destacadas em tom âmbar para a equipe. O status e os demais registros operacionais permanecem no histórico, sem revelar mensagens marcadas como internas.
 - Contas de teste podem avaliar seus próprios chamados sem usar Brevo.
+
+## Automação do andamento dos chamados (novembro/2026)
+
+Regras aplicadas no servidor, **na mesma transação** que salva cada mensagem ou atribuição, com histórico `ALTERACAO` identificando o motivo:
+- Abertura: `ABERTO` até um analista assumir/ser atribuído.
+- Atribuição de um chamado `ABERTO` a analista/administrador: `EM_ATENDIMENTO` automaticamente, exceto quando outro status for escolhido explicitamente.
+- Resposta pública da TI com a opção **Aguardar resposta do solicitante** marcada (padrão): `AGUARDANDO_USUARIO`.
+- Resposta pública da TI sem essa opção: `EM_ATENDIMENTO` quando estava `ABERTO` ou `AGUARDANDO_USUARIO`.
+- Mensagem do solicitante enquanto o chamado está `AGUARDANDO_USUARIO`: `EM_ATENDIMENTO` se houver responsável, ou `ABERTO` se ainda não houver atribuição.
+- Nota interna `EQUIPE`: nunca muda status e nunca envia e-mail ao solicitante.
+- Compartilhar com outro analista: não altera status, nem o responsável principal.
+- Resolução/cancelamento continuam explícitos, sem encerramento automático por inatividade.
+
+Mensagens e status são gravados atomicamente sob bloqueio da linha (`FOR UPDATE`), impedindo inconsistências em envios concorrentes. O backend valida o destino e a opção de aguardar resposta, independentemente do frontend. O histórico registra o motivo e a transição. O frontend atualiza o status após enviar a mensagem.
