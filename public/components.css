@@ -78,3 +78,17 @@
 @media(max-width:1150px){.ticket-layout{grid-template-columns:minmax(0,1.4fr) minmax(275px,.9fr)}.dashboard-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:850px){.ticket-layout{grid-template-columns:1fr}.dashboard-columns{grid-template-columns:1fr}.dashboard-toolbar{align-items:stretch;flex-direction:column}.dashboard-toolbar .field{min-width:0}}
 @media(max-width:550px){.dashboard-kpis{gap:10px}.dashboard-kpis .card{padding:14px}.dashboard-kpis .metric .num{font-size:25px}.aging-grid{gap:5px}.aging-grid>div{padding:12px 6px}.aging-grid strong{font-size:23px}}
+
+/* Filtros globais do dashboard administrativo */
+.dashboard-filterbar{background:#fff;border:1px solid #e2ebe5;border-radius:18px;padding:21px 24px;margin:8px 0 24px;box-shadow:0 8px 28px rgba(24,58,37,.035)}
+.dashboard-filterhead{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:17px}
+.dashboard-filterhead h2{font-size:17px;margin:0 0 6px;color:#183c29}
+.dashboard-filterhead p{font-size:12px;margin:0;line-height:1.5}
+.dashboard-filterhead button{white-space:nowrap}
+.dashboard-filtergrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px}
+.dashboard-filtergrid .field{min-width:0;display:flex;flex-direction:column;gap:7px}
+.dashboard-filtergrid label{font-size:12px;font-weight:750;color:#47614f}
+.dashboard-filtergrid select{width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.dashboard-filterhint{font-size:12px;line-height:1.5;margin:15px 0 0;color:#788b7d}
+@media(max-width:1350px){.dashboard-filtergrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){.dashboard-filterbar{padding:16px}.dashboard-filterhead{align-items:stretch;flex-direction:column}.dashboard-filterhead button{align-self:flex-start}.dashboard-filtergrid{grid-template-columns:1fr}}
