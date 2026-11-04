@@ -164,8 +164,8 @@ app.post('/api/tickets/:id/interaction',auth,ticketAccess,upload.array('files',5
    if(isStaff){
     if(awaitingReply && oldStatus!=='AGUARDANDO_USUARIO'){
      nextStatus='AGUARDANDO_USUARIO';reason='Aguardando resposta do solicitante após mensagem da equipe de TI';
-    }else if(!awaitingReply && oldStatus==='AGUARDANDO_USUARIO'){
-     nextStatus='EM_ATENDIMENTO';reason='Equipe de TI retomou o atendimento sem solicitar resposta';
+    }else if(!awaitingReply && ['ABERTO','AGUARDANDO_USUARIO'].includes(oldStatus)){
+     nextStatus='EM_ATENDIMENTO';reason='Equipe de TI assumiu ou retomou o atendimento sem solicitar resposta';
     }
    }else if(oldStatus==='AGUARDANDO_USUARIO'){
     nextStatus=t.assignee_id?'EM_ATENDIMENTO':'ABERTO';
