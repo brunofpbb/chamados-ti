@@ -134,7 +134,55 @@ const statusTitle=s=>({ABERTO:'Aberto',EM_ATENDIMENTO:'Em atendimento',AGUARDAND
 app.post('/api/tickets/:id/interaction',auth,ticketAccess,upload.array('files',5),safe(async(req,res)=>{const body=String(req.body?.body||'').trim();if(!body||body.length>5000)return res.status(400).json({erro:'Escreva uma mensagem'});if(['CANCELADO','RESOLVIDO'].includes(req.ticket.status))return res.status(409).json({erro:'Chamado encerrado'});const client=await pool.connect();try{await client.query('BEGIN');const q=await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,'MENSAGEM',$3) RETURNING id",[req.params.id,req.user.id,body]);await saveAttachments(client,req.files,req.params.id,req.user.id,q.rows[0].id);await client.query('UPDATE chamados SET updated_at=now() WHERE id=$1',[req.params.id]);await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}notifyTicketParticipants(req.ticket.id,req.ticket.requester_id,'Nova interação no chamado #'+req.params.id,`<p>Uma nova mensagem foi registrada no chamado <strong>#${esc(req.params.id)}</strong>.</p><p><b>Mensagem:</b></p><blockquote>${esc(body)}</blockquote><p>Acompanhe o histórico completo pelo portal.</p>`).catch(console.error);res.json({ok:true});}));
 app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{const t=req.ticket;const isManager=req.user.role!=='COLABORADOR';const status=String(req.body?.status||t.status);const assignee=req.body?.assigneeId===null?null:req.body?.assigneeId===undefined?t.assignee_id:Number(req.body.assigneeId);if(!statuses.includes(status))return res.status(400).json({erro:'Status inválido'});if(!isManager&&(status!=='CANCELADO'||!['ABERTO','EM_ATENDIMENTO','AGUARDANDO_USUARIO'].includes(t.status)))return res.status(403).json({erro:'Só é permitido cancelar chamado em andamento'});if(t.status==='CANCELADO'||t.status==='RESOLVIDO')return res.status(409).json({erro:'Chamado encerrado'});if(isManager&&assignee!==null){const q=await pool.query("SELECT id FROM usuarios WHERE id=$1 AND role IN ('ANALISTA','ADMIN') AND enabled=true",[assignee]);if(!q.rowCount)return res.status(400).json({erro:'Analista inválido'});}const client=await pool.connect();try{await client.query('BEGIN');await client.query('UPDATE chamados SET status=$1,assignee_id=$2,updated_at=now(),resolved_at=CASE WHEN $1=\'RESOLVIDO\' THEN now() ELSE NULL END WHERE id=$3',[status,isManager?assignee:t.assignee_id,t.id]);await client.query('INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,$3,$4)',[t.id,req.user.id,'ALTERACAO',`Status: ${t.status} → ${status}; responsável: ${isManager?assignee??'não atribuído':t.assignee_id??'não atribuído'}`]);await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}notifyTicketParticipants(t.id,t.requester_id,'Atualização do chamado #'+t.id,`<p>O chamado <strong>#${t.id}</strong> recebeu uma atualização.</p><p><b>Assunto:</b> ${esc(t.subject)}</p><p><b>Nova situação:</b> ${esc(statusTitle(status))}</p><p>Você pode acompanhar todas as etapas do atendimento no portal.</p>`).catch(console.error);res.json({ok:true});}));
 app.get('/api/analysts',auth,manager,safe(async(req,res)=>{const q=await pool.query("SELECT id,name,company_code,email,role FROM usuarios WHERE role IN ('ANALISTA','ADMIN') AND enabled=true ORDER BY name");res.json(q.rows);}));
-app.get('/api/dashboard',auth,manager,safe(async(req,res)=>{const q=await pool.query("SELECT status,count(*)::int AS total FROM chamados GROUP BY status");const daily=await pool.query("SELECT to_char(date_trunc('day',created_at AT TIME ZONE 'America/Sao_Paulo'),'DD/MM') AS dia,count(*)::int AS total FROM chamados WHERE created_at>=now()-interval '14 days' GROUP BY 1,date_trunc('day',created_at AT TIME ZONE 'America/Sao_Paulo') ORDER BY 2");const unit=await pool.query('SELECT company_code,count(*)::int total FROM chamados GROUP BY company_code ORDER BY total DESC');const avg=await pool.query("SELECT ROUND(AVG(EXTRACT(EPOCH FROM (resolved_at-created_at))/3600)::numeric,1) AS hours FROM chamados WHERE resolved_at IS NOT NULL");res.json({statuses:q.rows,daily:daily.rows,units:unit.rows,meanResolutionHours:avg.rows[0].hours});}));
+app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
+ const options={'7':7,'30':30,'90':90,'365':365,'all':null};
+ const period=String(req.query.period||'30');
+ if(!Object.hasOwn(options,period))return res.status(400).json({erro:'Período inválido'});
+ const days=options[period];
+ const where="($1::int IS NULL OR t.created_at >= now() - ($1::int * interval '1 day'))";
+ const [overall,statuses,daily,units,categories,priorities,analysts,aging]=await Promise.all([
+  pool.query(`SELECT count(*)::int total,count(*) FILTER(WHERE t.status='RESOLVIDO')::int resolved,
+   count(*) FILTER(WHERE t.status='CANCELADO')::int cancelled,
+   count(*) FILTER(WHERE t.status='ABERTO')::int open,
+   count(*) FILTER(WHERE t.status='EM_ATENDIMENTO')::int in_progress,
+   count(*) FILTER(WHERE t.status='AGUARDANDO_USUARIO')::int waiting,
+   count(*) FILTER(WHERE t.assignee_id IS NULL AND t.status NOT IN ('CANCELADO','RESOLVIDO'))::int unassigned,
+   round(avg(extract(epoch FROM(t.resolved_at-t.created_at))/3600)::numeric,1) FILTER(WHERE t.resolved_at IS NOT NULL) avg_resolution_hours
+   FROM chamados t WHERE ${where}`,[days]),
+  pool.query(`SELECT status,count(*)::int total FROM chamados t WHERE ${where} GROUP BY status ORDER BY total DESC`,[days]),
+  pool.query(`SELECT to_char(t.created_at AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS day,
+   count(*)::int total,count(*) FILTER(WHERE t.status='RESOLVIDO')::int resolved
+   FROM chamados t WHERE ${where} GROUP BY 1 ORDER BY 1`,[days]),
+  pool.query(`SELECT t.company_code,count(*)::int total,count(*) FILTER(WHERE t.status='RESOLVIDO')::int resolved
+   FROM chamados t WHERE ${where} GROUP BY t.company_code ORDER BY total DESC`,[days]),
+  pool.query(`SELECT t.category,count(*)::int total FROM chamados t WHERE ${where} GROUP BY t.category ORDER BY total DESC`,[days]),
+  pool.query(`SELECT t.urgency,count(*)::int total FROM chamados t WHERE ${where} GROUP BY t.urgency ORDER BY total DESC`,[days]),
+  pool.query(`SELECT u.id,u.name,u.company_code,u.role,
+   count(t.id)::int total_assigned,
+   count(t.id) FILTER (WHERE t.status='RESOLVIDO')::int resolved,
+   count(t.id) FILTER (WHERE t.status IN ('ABERTO','EM_ATENDIMENTO','AGUARDANDO_USUARIO'))::int active,
+   count(t.id) FILTER (WHERE t.status='AGUARDANDO_USUARIO')::int waiting,
+   round(avg(extract(epoch FROM (t.resolved_at-t.created_at))/3600)::numeric,1) FILTER(WHERE t.resolved_at IS NOT NULL) avg_resolution_hours,
+   round(avg(extract(epoch FROM (fr.first_response_at-t.created_at))/3600)::numeric,1) FILTER(WHERE fr.first_response_at IS NOT NULL) avg_first_response_hours
+   FROM usuarios u LEFT JOIN chamados t ON t.assignee_id=u.id AND ${where}
+   LEFT JOIN LATERAL (
+      SELECT min(i.created_at) AS first_response_at FROM interacoes i
+      JOIN usuarios author ON author.id=i.author_id
+      WHERE i.ticket_id=t.id AND i.kind='MENSAGEM' AND author.role IN ('ADMIN','ANALISTA')
+        AND i.author_id<>t.requester_id
+   ) fr ON true
+   WHERE u.role IN ('ADMIN','ANALISTA')
+   GROUP BY u.id,u.name,u.company_code,u.role
+   ORDER BY resolved DESC,total_assigned DESC,u.name`,[days]),
+  pool.query(`SELECT count(*) FILTER(WHERE t.status NOT IN ('RESOLVIDO','CANCELADO') AND t.created_at<now()-interval '24 hours')::int older_24h,
+    count(*) FILTER(WHERE t.status NOT IN ('RESOLVIDO','CANCELADO') AND t.created_at<now()-interval '48 hours')::int older_48h,
+    count(*) FILTER(WHERE t.status NOT IN ('RESOLVIDO','CANCELADO') AND t.created_at<now()-interval '7 days')::int older_7d
+    FROM chamados t WHERE ${where}`,[days])
+ ]);
+ res.json({period,overview:overall.rows[0],statuses:statuses.rows,daily:daily.rows,
+   units:units.rows,categories:categories.rows,priorities:priorities.rows,
+   analysts:analysts.rows,aging:aging.rows[0]});
+}));
 
 /* Administração: usuários vinculados ao RH e contas temporárias de teste.
    Nunca existe cadastro público ou senha padrão de administrador. */
