@@ -151,3 +151,31 @@
 .test-credential-fields strong{display:block;font-size:15px;overflow-wrap:anywhere;color:#17432b}
 .test-credentials>button{margin-right:10px;margin-top:5px}
 @media(max-width:600px){.test-credential-fields{grid-template-columns:1fr}}
+
+/* Avaliações pendentes e conversa interna para equipe de TI. */
+.nav-count{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#f0ca5f;color:#203522;font-size:11px;font-weight:800}
+.review-notice{display:flex;flex-direction:column;gap:6px;width:100%;text-align:left;padding:15px 18px;border:1px solid #e0eae3;background:#fbfdfb;border-radius:10px;margin-top:10px;cursor:pointer;font:inherit;color:inherit}
+.review-notice:hover{border-color:#9cc7aa;background:#f0f9f2}
+.review-notice strong{font-size:14px;color:#173a25}
+.review-notice span,.review-notice em{font-size:12px;color:#597263;font-style:normal}
+.review-notice small{font-size:11px;color:#057036;font-weight:700}
+.event-internal{background:#fff8e7;border-left:4px solid #c69338;border-radius:8px;padding:12px 14px;margin:8px 0}
+.event-internal>.muted,.event-internal span.muted{color:#89611d}
+.reply-recipient{border:1px solid #e1e9e3;border-radius:10px;background:#f8fbf8;padding:12px 14px;margin-top:18px}
+.reply-recipient select{width:100%}
+.reply-recipient small{font-size:11px;line-height:1.5;color:#687f70}
+.ticket-review{margin-top:0}
+.ticket-review h2{margin:0 0 14px}
+.ticket-review form{display:grid;gap:14px}
+.review-meta{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 16px;font-size:12px;color:#58705f}
+.review-meta span{background:#f0f7f2;border-radius:9px;padding:9px 12px}
+.review-meta strong{color:#17422b}
+.review-result{padding:16px;border:1px solid #d6e8d9;background:#f4faf5;border-radius:10px}
+.review-result p{margin:0 0 7px;color:#315740}
+.review-result p:first-child,.review-result p:nth-child(2),.review-result p:nth-child(3){color:#bd8b24;font-size:15px}
+.review-result small{color:#728475;font-size:11px}
+.solution-summary{margin-top:18px;border-left:4px solid #0c793d;padding:13px 15px;background:#f1f9f3;border-radius:0 8px 8px 0}
+.solution-summary strong{font-size:12px;color:#005b28}
+.solution-summary p{margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+#resolutionField[hidden]{display:none}
+@media(max-width:650px){.review-meta{flex-direction:column}.nav-count{margin-left:8px}}
