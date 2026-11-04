@@ -104,3 +104,9 @@ Na aba **Indicadores** (somente administradores), os filtros de **período, empr
 - Listas de seleção vêm dos registros existentes (empresas e categorias) e dos usuários ativos da TI; permanecem disponíveis mesmo que o filtro atual não tenha chamados.
 - O código da empresa é preservado e identificado por nome fantasia quando a API Alterdata permite carregar a lista de empresas.
 - Os indicadores de desempenho por analista não somam participantes compartilhados, evitando duplicação de resultados.
+
+## Contas de teste sem e-mail
+
+No painel **Usuários → Criar conta de teste**, informe apenas nome e perfil. O backend gera uma senha aleatória individual (forte), grava somente o hash bcrypt, ativa a conta imediatamente e exibe **login e senha uma única vez** para o administrador copiar. Não há envio de e-mail nem consulta ao Alterdata. A conta expira em sete dias e pode ser desativada antes do prazo. A opção **Nova senha** na listagem de usuários permite redefinir uma credencial temporária e invalida a anterior.
+
+Por segurança, **não** é utilizada uma senha compartilhada curta como `0000`: esta instalação é pública e permite contas de teste com perfil ADMIN. Um campo interno de e-mail no esquema legado recebe identificador não roteável `@example.invalid`, oculto na interface; o sistema não tenta enviar notificações para contas de teste. Senhas geradas não são incluídas em logs, e-mails ou no banco em texto claro.
