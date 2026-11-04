@@ -116,3 +116,27 @@
 .new-ticket-card .file-picker-button:hover,.ticket-section .file-picker-button:hover{transform:none}
 @media(max-width:1000px){.main{padding:20px 20px 26px}.sidebar{flex-basis:230px}.new-ticket-card{padding:18px 20px}}
 @media(max-width:760px){.layout{display:block}.sidebar{width:100%;height:auto;position:static}.main{width:100%;padding:18px 14px 24px}.main>.top{margin-bottom:16px}.new-ticket-card{padding:16px}.new-ticket-card .form-grid{grid-template-columns:1fr;gap:12px}.new-ticket-card .field.wide{grid-column:1}.new-ticket-card .file-picker-button{width:auto}.ticket-list-card{padding:14px}}
+
+/* Campo de senha com ação de visibilidade acessível. */
+.password-control{position:relative;display:flex;align-items:center;min-width:0}
+.password-control>input{width:100%;padding-right:103px!important}
+.password-toggle{position:absolute;right:7px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:5px;border:0;border-radius:7px;background:transparent;padding:8px 9px;font-size:12px;font-weight:700;color:#005b28;white-space:nowrap}
+.password-toggle:hover,.password-toggle:focus-visible{background:#e6f2e9;outline-offset:1px}
+.password-eye{font-size:15px;line-height:1}
+
+/* Notificações globais e transitórias, sem alterar nem limpar formulários. */
+.app-toast{position:fixed;top:20px;right:20px;z-index:9999;display:flex;align-items:center;gap:12px;max-width:min(450px,calc(100vw - 32px));padding:13px 14px;border-radius:11px;border:1px solid;box-shadow:0 14px 40px rgba(0,0,0,.14);font-size:13px;font-weight:600;line-height:1.5;overflow-wrap:anywhere}
+.toast-error{background:#fff0ef;border-color:#e8a7a0;color:#9c2424}
+.toast-success{background:#e7f6eb;border-color:#9acaad;color:#155b30}
+.toast-symbol{border:2px solid currentColor;width:23px;height:23px;border-radius:50%;display:inline-flex;justify-content:center;align-items:center;flex:0 0 23px;font-weight:900}
+.toast-content{flex:1}
+.toast-close{border:0;background:transparent;color:inherit;font-size:20px;line-height:1;padding:4px 6px;border-radius:6px;cursor:pointer}
+.toast-close:hover{background:#0000000a}
+@media(max-width:600px){.app-toast{top:12px;right:12px;left:12px;max-width:none}}
+
+/* Empresa identificada por nome fantasia e código, sem expandir a página. */
+.ticket-company{font-size:12px;line-height:1.4;max-width:200px;overflow-wrap:anywhere}
+.ticket-list-card .filters #companyFilter{max-width:300px;min-width:190px}
+.ticket-list-card .table-wrap{overflow-x:auto;max-width:100%}
+.ticket-list-card table{min-width:960px}
+@media(max-width:1100px){.ticket-list-card table{min-width:930px}}
