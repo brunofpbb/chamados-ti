@@ -95,7 +95,7 @@ const allowed=['image/jpeg','image/png','image/webp','application/pdf'];const up
 async function saveAttachments(client,files,ticket,user,interaction=null){for(const f of files||[]){if(!allowed.includes(f.mimetype))continue;const magic=f.buffer;const ok=f.mimetype==='application/pdf'?magic.subarray(0,5).toString()==='%PDF-':f.mimetype==='image/png'?magic.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex')):f.mimetype==='image/jpeg'?magic.subarray(0,3).equals(Buffer.from('ffd8ff','hex')):magic.subarray(0,4).toString()==='RIFF'&&magic.subarray(8,12).toString()==='WEBP';if(!ok)throw Object.assign(Error('Arquivo inválido: '+f.originalname),{status:400});await client.query('INSERT INTO anexos(ticket_id,interaction_id,filename,mime,data,uploaded_by) VALUES($1,$2,$3,$4,$5,$6)',[ticket,interaction,path.basename(f.originalname).slice(0,180),f.mimetype,f.buffer,user]);}}
 const listSql='SELECT t.id,t.subject,t.category,t.description,t.urgency,t.status,t.company_code,t.assignee_id,t.requester_id,t.created_at,t.updated_at,t.resolved_at,u.name AS requester_name,a.name AS assignee_name FROM chamados t JOIN usuarios u ON u.id=t.requester_id LEFT JOIN usuarios a ON a.id=t.assignee_id';
 app.get('/api/tickets',auth,safe(async(req,res)=>{const analyst=req.user.role!=='COLABORADOR';const q=await pool.query(listSql+(analyst?'':' WHERE t.requester_id=$1')+' ORDER BY t.created_at DESC LIMIT 500',analyst?[]:[req.user.id]);res.json(q.rows);}));
-app.post('/api/tickets',auth,upload.array('files',5),safe(async(req,res)=>{const {subject,description,category,urgency}=req.body;if(!subject?.trim()||subject.length>180||!description?.trim()||description.length>5000)return res.status(400).json({erro:'Informe assunto e descrição'});const urg=['BAIXA','NORMAL','ALTA','CRITICA'].includes(urgency)?urgency:'NORMAL';const client=await pool.connect();let row;try{await client.query('BEGIN');const r=await client.query('INSERT INTO chamados(requester_id,company_code,subject,description,category,urgency) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[req.user.id,req.user.company_code,subject.trim(),description.trim(),String(category||'Outros').slice(0,80),urg]);row=r.rows[0];await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,'ABERTURA',$3)",[row.id,req.user.id,description.trim()]);await saveAttachments(client,req.files,row.id,req.user.id);await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}send(req.user.email,'Chamado #'+row.id+' aberto | Turin',`<p>Seu chamado <strong>#${row.id}</strong> foi registrado com sucesso. A equipe de TI já pode acompanhar sua solicitação.</p><p><b>Assunto:</b> ${esc(subject)}</p><p><b>Categoria:</b> ${esc(String(category||'Outros'))}</p><p><b>Prioridade:</b> ${esc(urg)}</p><p><b>Situação:</b> Aberto, aguardando atendimento.</p>`).catch(e=>console.error('Notificação',e));res.status(201).json({id:row.id});}));
+app.post('/api/tickets',auth,upload.array('files',5),safe(async(req,res)=>{const {subject,description,category,urgency}=req.body;if(!subject?.trim()||subject.length>180||!description?.trim()||description.length>5000)return res.status(400).json({erro:'Informe assunto e descrição'});const urg=['BAIXA','NORMAL','ALTA','CRITICA'].includes(urgency)?urgency:'NORMAL';const client=await pool.connect();let row;try{await client.query('BEGIN');const r=await client.query('INSERT INTO chamados(requester_id,company_code,subject,description,category,urgency) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[req.user.id,req.user.company_code,subject.trim(),description.trim(),String(category||'Outros').slice(0,80),urg]);row=r.rows[0];await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,'ABERTURA',$3)",[row.id,req.user.id,description.trim()]);await saveAttachments(client,req.files,row.id,req.user.id);await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}if(!req.user.is_test)send(req.user.email,'Chamado #'+row.id+' aberto | Turin',`<p>Seu chamado <strong>#${row.id}</strong> foi registrado com sucesso. A equipe de TI já pode acompanhar sua solicitação.</p><p><b>Assunto:</b> ${esc(subject)}</p><p><b>Categoria:</b> ${esc(String(category||'Outros'))}</p><p><b>Prioridade:</b> ${esc(urg)}</p><p><b>Situação:</b> Aberto, aguardando atendimento.</p>`).catch(e=>console.error('Notificação',e));res.status(201).json({id:row.id});}));
 async function ticketAccess(req,res,next){try{const q=await pool.query(listSql+' WHERE t.id=$1',[req.params.id]);const t=q.rows[0];if(!t)return res.status(404).json({erro:'Chamado não encontrado'});if(req.user.role==='COLABORADOR'&&String(t.requester_id)!==String(req.user.id))return res.status(403).json({erro:'Sem acesso'});req.ticket=t;next();}catch(e){next(e);}}
 app.get('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{const i=await pool.query('SELECT i.id,i.kind,i.body,i.created_at,u.name AS author FROM interacoes i JOIN usuarios u ON u.id=i.author_id WHERE i.ticket_id=$1 ORDER BY i.created_at',[req.params.id]);const a=await pool.query('SELECT id,interaction_id,filename,mime,created_at FROM anexos WHERE ticket_id=$1 ORDER BY id',[req.params.id]);const shared=await pool.query('SELECT u.id,u.name,u.role,c.created_at FROM chamados_compartilhados c JOIN usuarios u ON u.id=c.user_id WHERE c.ticket_id=$1 ORDER BY u.name',[req.params.id]);res.json({ticket:req.ticket,interactions:i.rows,attachments:a.rows,shared:shared.rows});}));
 app.post('/api/tickets/:id/share',auth,manager,ticketAccess,safe(async(req,res)=>{
@@ -111,7 +111,7 @@ app.post('/api/tickets/:id/share',auth,manager,ticketAccess,safe(async(req,res)=
  const change=await client.query('INSERT INTO chamados_compartilhados(ticket_id,user_id,added_by) VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING user_id',[ticket.id,userId,req.user.id]);created=change.rowCount>0;
  if(created){await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,'COMPARTILHAMENTO',$3)",[ticket.id,req.user.id,'Chamado compartilhado com '+invited.name]);await client.query('UPDATE chamados SET updated_at=now() WHERE id=$1',[ticket.id]);}
  await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
- if(created){send(invited.email,'Chamado #'+ticket.id+' compartilhado com você',`<p>O chamado <strong>#${ticket.id}</strong> foi compartilhado com você.</p><p><strong>Assunto:</strong> ${esc(ticket.subject)}</p><p>Você pode acompanhar e interagir no portal. O responsável principal permanece o mesmo.</p>`).catch(console.error);}
+ if(created&&!invited.email.endsWith('@example.invalid')){send(invited.email,'Chamado #'+ticket.id+' compartilhado com você',`<p>O chamado <strong>#${ticket.id}</strong> foi compartilhado com você.</p><p><strong>Assunto:</strong> ${esc(ticket.subject)}</p><p>Você pode acompanhar e interagir no portal. O responsável principal permanece o mesmo.</p>`).catch(console.error);}
  res.json({ok:true,created});
 }));
 app.delete('/api/tickets/:id/share/:userId',auth,manager,ticketAccess,safe(async(req,res)=>{
@@ -122,7 +122,7 @@ app.delete('/api/tickets/:id/share/:userId',auth,manager,ticketAccess,safe(async
 }));
 app.get('/api/attachments/:id',auth,safe(async(req,res)=>{const q=await pool.query('SELECT a.*,t.requester_id FROM anexos a JOIN chamados t ON t.id=a.ticket_id WHERE a.id=$1',[req.params.id]);const f=q.rows[0];if(!f)return res.sendStatus(404);if(req.user.role==='COLABORADOR'&&String(f.requester_id)!==String(req.user.id))return res.sendStatus(403);res.set({'Content-Type':f.mime,'Content-Disposition':'attachment; filename="'+f.filename.replace(/["\r\n]/g,'_')+'"','X-Content-Type-Options':'nosniff','Cache-Control':'private, no-store'});res.send(f.data);}));
 async function notifyTicketParticipants(ticketId,requesterId,subject,html){
- const q=await pool.query(`SELECT DISTINCT u.email FROM usuarios u WHERE u.enabled=true AND u.id IN (
+ const q=await pool.query(`SELECT DISTINCT u.email FROM usuarios u WHERE u.enabled=true AND u.is_test=false AND u.id IN (
  SELECT $2::bigint UNION SELECT assignee_id FROM chamados WHERE id=$1 AND assignee_id IS NOT NULL
  UNION SELECT user_id FROM chamados_compartilhados WHERE ticket_id=$1
  )`,[ticketId,requesterId]);
@@ -218,25 +218,37 @@ app.patch('/api/admin/users/:id',auth,admin,safe(async(req,res)=>{
  res.json({ok:true});
 }));
 app.post('/api/admin/test-users',auth,admin,throttle,safe(async(req,res)=>{
- const name=String(req.body?.name||'').trim(),email=String(req.body?.email||'').trim().toLowerCase(),role=String(req.body?.role||'');
- if(name.length<3||name.length>120||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!['ADMIN','ANALISTA','COLABORADOR'].includes(role))
-   return res.status(400).json({erro:'Informe nome, e-mail válido e perfil de teste'});
+ const name=String(req.body?.name||'').trim(),role=String(req.body?.role||'');
+ if(name.length<3||name.length>120||!['ADMIN','ANALISTA','COLABORADOR'].includes(role))
+   return res.status(400).json({erro:'Informe nome e perfil válido para teste'});
+ const temporaryPassword=crypto.randomBytes(16).toString('base64url');
+ const passhash=await bcrypt.hash(temporaryPassword,12);
+ const loginId=crypto.randomUUID();
+ // Campo exigido pelo esquema legado; endereço reservado, não utilizado para enviar e-mail.
+ const internalEmail='teste-'+loginId+'@example.invalid';
  const client=await pool.connect();let user;
  try{
   await client.query('BEGIN');
   const login=await allocateLogin(client,name);
-  const r=await client.query("INSERT INTO usuarios(company_code,employee_id,employee_lookup,name,email,role,login,is_test,test_expires_at) VALUES('TESTE',$1,$2,$3,$4,$5,$6,true,now()+interval '7 days') RETURNING id,name,email,login,role,test_expires_at",['TEST-'+crypto.randomUUID(),name,name,email,role,login]);
+  const r=await client.query("INSERT INTO usuarios(company_code,employee_id,employee_lookup,name,email,role,login,passhash,is_test,test_expires_at) VALUES('TESTE',$1,$2,$3,$4,$5,$6,$7,true,now()+interval '7 days') RETURNING id,name,login,role,test_expires_at",['TEST-'+loginId,name,name,internalEmail,role,login,passhash]);
   user=r.rows[0];await client.query('COMMIT');
  }catch(e){await client.query('ROLLBACK');if(e.code==='23505')return res.status(409).json({erro:'Login em uso, tente novamente'});throw e;}finally{client.release();}
- const token=await tokenFor(user,'CONVITE');
- try{await send(email,'Convite de teste | Chamados TI Turin',`<p>Olá, ${esc(name)}.</p><p>Uma conta temporária de <b>${esc(role)}</b> foi criada para testes. Não utiliza dados de funcionários do Alterdata.</p><p>Login: <b>${esc(user.login)}</b></p><p><a href="${esc(link(token))}">Criar senha e entrar</a></p><p>Esta conta expira em 7 dias e pode ser desativada antecipadamente pelo administrador.</p>`);}
- catch(e){console.error('Falha ao convidar usuário de teste',e);return res.status(503).json({erro:'Conta de teste criada, porém falhou o envio do convite. Reenvie pelo painel de usuários.'});}
- res.status(201).json({id:user.id,login:user.login,role:user.role,expiresAt:user.test_expires_at});
+ res.set('Cache-Control','no-store');
+ res.status(201).json({id:user.id,login:user.login,role:user.role,expiresAt:user.test_expires_at,temporaryPassword});
+}));
+app.post('/api/admin/test-users/:id/reset-password',auth,admin,throttle,safe(async(req,res)=>{
+ const id=Number(req.params.id);
+ if(!Number.isSafeInteger(id)||id<=0)return res.status(400).json({erro:'Usuário inválido'});
+ const password=crypto.randomBytes(16).toString('base64url'),hash=await bcrypt.hash(password,12);
+ const q=await pool.query("UPDATE usuarios SET passhash=$1 WHERE id=$2 AND is_test=true AND enabled=true AND test_expires_at>now() RETURNING id,login",[hash,id]);
+ if(!q.rowCount)return res.status(404).json({erro:'Conta de teste inexistente, inativa ou expirada'});
+ res.set('Cache-Control','no-store');
+ res.json({login:q.rows[0].login,temporaryPassword:password});
 }));
 app.post('/api/admin/users/:id/invite',auth,admin,throttle,safe(async(req,res)=>{
  const q=await pool.query('SELECT id,name,email,login,enabled,is_test,test_expires_at FROM usuarios WHERE id=$1',[req.params.id]);
  const u=q.rows[0];if(!u?.enabled)return res.status(404).json({erro:'Usuário não encontrado ou desativado'});
- if(u.is_test&&(!u.test_expires_at||new Date(u.test_expires_at)<=new Date()))return res.status(409).json({erro:'Conta de teste expirada'});
+ if(u.is_test)return res.status(400).json({erro:'Contas de teste não usam convites por e-mail. Gere nova senha temporária no painel.'});
  const token=await tokenFor(u,'CONVITE');
  await send(u.email,'Convite de acesso | Chamados TI Turin',`<p>Olá, ${esc(u.name)}!</p><p>Login: <b>${esc(u.login)}</b></p><p><a href="${esc(link(token))}">Criar ou redefinir senha</a></p><p>Este convite expira em 30 minutos.</p>`);
  res.json({ok:true});
