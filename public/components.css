@@ -424,3 +424,43 @@ th[aria-sort="ascending"] .ticket-sort-indicator,th[aria-sort="descending"] .tic
  .ticket-list-card .multi-filters>input,.ticket-list-card .multi-filters>.clear-ticket-filters{grid-column:auto;width:100%}
  .ticket-period-field label{font-size:12px}
 }
+
+/* Barra de filtros de chamados: duas linhas intencionais e alinhadas.
+   Linha 1: pesquisa + limpar; linha 2: os quatro filtros proporcionais. */
+.ticket-list-card .filters.multi-filters{
+ display:grid;
+ grid-template-columns:repeat(4,minmax(0,1fr));
+ grid-template-areas:"search search search clear" "companies status priority period";
+ column-gap:10px;row-gap:10px;align-items:stretch;
+ margin-bottom:12px;
+}
+.ticket-list-card .filters.multi-filters>input#search{
+ grid-area:search;grid-column:auto;display:block;width:100%;min-width:0;
+ box-sizing:border-box;height:44px;min-height:44px;align-self:stretch;
+}
+.ticket-list-card .filters.multi-filters>#clearTicketFilters{
+ grid-area:clear;grid-column:auto;justify-self:stretch;align-self:stretch;
+ width:100%;min-width:0;height:44px;min-height:44px;white-space:nowrap;
+}
+.ticket-list-card .filters.multi-filters>#companyFilter{grid-area:companies;align-self:stretch}
+.ticket-list-card .filters.multi-filters>#statusFilter{grid-area:status;align-self:stretch}
+.ticket-list-card .filters.multi-filters>#priorityFilter{grid-area:priority;align-self:stretch}
+.ticket-list-card .filters.multi-filters>.ticket-period-field{grid-area:period;align-self:stretch}
+.ticket-list-card .filters.multi-filters .ticket-period-field label{
+ position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+ overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
+.ticket-list-card .filters.multi-filters .ticket-period-field select{height:44px;font-size:13px}
+.ticket-list-card .filters.multi-filters .multi-filter-summary{height:44px;box-sizing:border-box}
+@media(max-width:900px){
+ .ticket-list-card .filters.multi-filters{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-areas:"search clear" "companies status" "priority period";
+ }
+}
+@media(max-width:560px){
+ .ticket-list-card .filters.multi-filters{
+  grid-template-columns:1fr;
+  grid-template-areas:"search" "companies" "status" "priority" "period" "clear";
+ }
+}
