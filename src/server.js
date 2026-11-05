@@ -356,7 +356,7 @@ app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
      FROM (
        SELECT c.ticket_id,
          (SELECT count(*)::int FROM interacoes i WHERE i.ticket_id=c.ticket_id
-            AND i.author_id=u.id AND i.kind='MENSAGEM') AS contributions
+            AND i.author_id=u.id AND i.kind='MENSAGEM' AND i.created_at>=c.created_at) AS contributions
        FROM chamados_compartilhados c
        JOIN chamados shared_ticket ON shared_ticket.id=c.ticket_id
        WHERE c.user_id=u.id
