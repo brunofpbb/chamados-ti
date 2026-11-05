@@ -104,7 +104,36 @@ app.get('/api/tickets',auth,safe(async(req,res)=>{
  const q=await pool.query(sql,analyst?[req.user.id]:[req.user.id,req.user.id]);
  res.json(q.rows);
 }));
-app.post('/api/tickets',auth,upload.array('files',5),safe(async(req,res)=>{const {subject,description,category,urgency}=req.body;if(!subject?.trim()||subject.length>180||!description?.trim()||description.length>5000)return res.status(400).json({erro:'Informe assunto e descrição'});const urg=['BAIXA','NORMAL','ALTA','CRITICA'].includes(urgency)?urgency:'NORMAL';const client=await pool.connect();let row;try{await client.query('BEGIN');const r=await client.query('INSERT INTO chamados(requester_id,company_code,subject,description,category,urgency) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[req.user.id,req.user.company_code,subject.trim(),description.trim(),String(category||'Outros').slice(0,80),urg]);row=r.rows[0];await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,'ABERTURA',$3)",[row.id,req.user.id,description.trim()]);await saveAttachments(client,req.files,row.id,req.user.id);await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}if(!req.user.is_test)send(req.user.email,'Chamado #'+row.id+' aberto | Turin',`<p>Seu chamado <strong>#${row.id}</strong> foi registrado com sucesso. A equipe de TI já pode acompanhar sua solicitação.</p><p><b>Assunto:</b> ${esc(subject)}</p><p><b>Categoria:</b> ${esc(String(category||'Outros'))}</p><p><b>Prioridade:</b> ${esc(urg)}</p><p><b>Situação:</b> Aberto, aguardando atendimento.</p>`).catch(e=>console.error('Notificação',e));res.status(201).json({id:row.id});}));
+// Aviso inicial à equipe: um envio por endereço, independentemente de quantas contas
+// ativas compartilhem o mesmo e-mail. Perfis de teste não usam correspondência eletrônica.
+async function notifyStaffTicketOpened(ticket,requester){
+ const result=await pool.query(
+  "SELECT DISTINCT lower(trim(email)) AS email FROM usuarios WHERE enabled=true AND is_test=false AND role IN ('ANALISTA','ADMIN') AND nullif(trim(email),'') IS NOT NULL AND lower(trim(email))<>lower($1) ORDER BY 1",
+  [requester.is_test?'':requester.email||'']
+ );
+ if(!result.rowCount)return;
+ let companyName='Empresa não identificada';
+ try{
+  const companies=await alter.companies();
+  companyName=companies.find(c=>String(c.code)===String(requester.company_code))?.name||companyName;
+ }catch(e){console.warn('Não foi possível consultar nome da empresa para e-mail de abertura:',e.message);}
+ const subject='Novo chamado #'+String(ticket.id).padStart(5,'0')+' | Chamados TI Turin';
+ const priorities={BAIXA:'Baixa',NORMAL:'Normal',ALTA:'Alta',CRITICA:'Crítica'};
+ const html=`<p>Um novo chamado de TI foi registrado e está aguardando atendimento.</p>
+ <p><b>Chamado:</b> #${String(ticket.id).padStart(5,'0')}</p>
+ <p><b>Solicitante:</b> ${esc(requester.name)}</p>
+ <p><b>Empresa:</b> ${esc(companyName)}</p>
+ <p><b>Assunto:</b> ${esc(ticket.subject)}</p>
+ <p><b>Categoria:</b> ${esc(ticket.category)}</p>
+ <p><b>Prioridade:</b> ${esc(priorities[ticket.urgency]||ticket.urgency)}</p>
+ <p><b>Situação:</b> Aberto — aguardando atendimento.</p>
+ <p><a href="${esc(publicUrl)}">Acessar a central de chamados</a></p>`;
+ const outcomes=await Promise.allSettled(result.rows.map(row=>send(row.email,subject,html)));
+ for(let i=0;i<outcomes.length;i++){
+  if(outcomes[i].status==='rejected')console.error('Falha na notificação de novo chamado para a equipe de TI:',outcomes[i].reason?.message||outcomes[i].reason);
+ }
+}
+app.post('/api/tickets',auth,upload.array('files',5),safe(async(req,res)=>{const {subject,description,category,urgency}=req.body;if(!subject?.trim()||subject.length>180||!description?.trim()||description.length>5000)return res.status(400).json({erro:'Informe assunto e descrição'});const urg=['BAIXA','NORMAL','ALTA','CRITICA'].includes(urgency)?urgency:'NORMAL';const client=await pool.connect();let row;try{await client.query('BEGIN');const r=await client.query('INSERT INTO chamados(requester_id,company_code,subject,description,category,urgency) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,subject,category,urgency',[req.user.id,req.user.company_code,subject.trim(),description.trim(),String(category||'Outros').slice(0,80),urg]);row=r.rows[0];await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,'ABERTURA',$3)",[row.id,req.user.id,description.trim()]);await saveAttachments(client,req.files,row.id,req.user.id);await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}if(!req.user.is_test)send(req.user.email,'Chamado #'+row.id+' aberto | Turin',`<p>Seu chamado <strong>#${row.id}</strong> foi registrado com sucesso. A equipe de TI já pode acompanhar sua solicitação.</p><p><b>Assunto:</b> ${esc(subject)}</p><p><b>Categoria:</b> ${esc(String(category||'Outros'))}</p><p><b>Prioridade:</b> ${esc(urg)}</p><p><b>Situação:</b> Aberto, aguardando atendimento.</p>`).catch(e=>console.error('Notificação',e));notifyStaffTicketOpened(row,req.user).catch(e=>console.error('Erro ao notificar equipe sobre novo chamado:',e.message));res.status(201).json({id:row.id});}));
 async function ticketAccess(req,res,next){try{const q=await pool.query(listSql+' WHERE t.id=$1',[req.params.id]);const t=q.rows[0];if(!t)return res.status(404).json({erro:'Chamado não encontrado'});if(req.user.role==='COLABORADOR'&&String(t.requester_id)!==String(req.user.id))return res.status(403).json({erro:'Sem acesso'});req.ticket=t;next();}catch(e){next(e);}}
 app.get('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{const isStaff=req.user.role!=='COLABORADOR';
  const i=await pool.query("SELECT i.id,i.author_id,i.kind,i.body,i.visibility,i.created_at,u.name AS author FROM interacoes i JOIN usuarios u ON u.id=i.author_id WHERE i.ticket_id=$1 AND ($2::boolean OR i.visibility='SOLICITANTE') ORDER BY i.created_at,i.id",[req.params.id,isStaff]);
@@ -215,9 +244,15 @@ app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{
   changed=nextStatus!==oldStatus||String(actualAssignee??'')!==String(current.assignee_id??'');
   if(changed){
    await client.query("UPDATE chamados SET status=$1,assignee_id=$2,updated_at=now(),resolved_at=CASE WHEN $1='RESOLVIDO' THEN now() ELSE NULL END,resolution_summary=CASE WHEN $1='RESOLVIDO' THEN $4 ELSE resolution_summary END,waiting_since=CASE WHEN $1='AGUARDANDO_USUARIO' AND $5<>'AGUARDANDO_USUARIO' THEN now() WHEN $1<>'AGUARDANDO_USUARIO' THEN NULL ELSE waiting_since END,waiting_cycle=CASE WHEN $1='AGUARDANDO_USUARIO' AND $5<>'AGUARDANDO_USUARIO' THEN waiting_cycle+1 ELSE waiting_cycle END WHERE id=$3",[nextStatus,actualAssignee,t.id,resolutionSummary||null,oldStatus]);
+   const names=await client.query('SELECT id,name FROM usuarios WHERE id=$1 OR id=$2',[current.assignee_id,actualAssignee]);
+   const nameById=new Map(names.rows.map(user=>[String(user.id),user.name]));
+   const oldAssigneeName=current.assignee_id===null?'Não atribuído':nameById.get(String(current.assignee_id))||'Usuário indisponível';
+   const newAssigneeName=actualAssignee===null?'Não atribuído':nameById.get(String(actualAssignee))||'Usuário indisponível';
+   const statusText=statusTitle(oldStatus)+' → '+statusTitle(nextStatus);
+   const changedAssignee=String(current.assignee_id??'')!==String(actualAssignee??'');
    const message=automaticallyAssumed?
-    'Alteração automática: Aberto → Em atendimento. Motivo: chamado atribuído a um analista.':
-    'Alteração de atendimento: '+statusTitle(oldStatus)+' → '+statusTitle(nextStatus)+'; responsável: '+(current.assignee_id??'não atribuído')+' → '+(actualAssignee??'não atribuído');
+    'Alteração automática: '+statusText+'. Motivo: chamado atribuído a '+newAssigneeName+'.':
+    'Alteração de atendimento: '+statusText+(changedAssignee?'; responsável: '+oldAssigneeName+' → '+newAssigneeName:'')+'.';
    await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body) VALUES($1,$2,'ALTERACAO',$3)",[t.id,req.user.id,message]);
   }
   await client.query('COMMIT');
