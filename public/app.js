@@ -205,7 +205,7 @@ function dashboardPage(){
  ${card('Chamados por empresa','company',bars(dashboard.units||[],x=>companyLabel(x.company_code),'general'))}
  ${card('Prioridades dos chamados','flag',bars(dashboard.priorities||[],x=>({BAIXA:'Baixa',NORMAL:'Normal',ALTA:'Alta',CRITICA:'Crítica'}[x.urgency]||x.urgency),'priority'))}
  ${card('Evolução diária de aberturas','trend',dashboardDailyChart(dashboard.daily||[]),'dash-daily-card')}
- ${card('Idade dos chamados pendentes','hour',`<div class="aging-grid"><div><strong>${Number(aging.older_24h||0)}</strong><span>Mais de 24 horas</span></div><div><strong>${Number(aging.older_48h||0)}</strong><span>Mais de 48 horas</span></div><div><strong>${Number(aging.older_7d||0)}</strong><span>Mais de 7 dias</span></div></div><p class="dashboard-note">Tempo corrido desde a abertura, sem SLA contratual.</p>`)}
+ ${card('Idade dos chamados pendentes','hour',`<div class="aging-grid"><div><strong>${Number(aging.older_24h||0)}</strong><span>Mais de 24 horas</span></div><div><strong>${Number(aging.older_48h||0)}</strong><span>Mais de 48 horas</span></div><div><strong>${Number(aging.older_7d||0)}</strong><span>Mais de 7 dias</span></div></div>`)}
  </div>`;
  const statusCard=card('Chamados por situação','status',bars(dashboard.statuses||[],x=>label(x.status),'status'));
  const categoryCard=card('Categorias mais solicitadas','category',bars(dashboard.categories||[],x=>x.category,'general'));
