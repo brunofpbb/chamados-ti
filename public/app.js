@@ -159,7 +159,7 @@ function dashboardPage(){
   const max=Math.max(1,...items.map(x=>Number(x.total||0)));
   return items.length?items.map(x=>{
    const n=Number(x.total||0),name=describe(x),color=colorFor(x);
-   return `<div class="indicator-bar-row"><div class="indicator-bar-info"><span>${esc(name)}</span><strong>${n} <small>(${total?Math.round(n/total*100):0}%)</small></strong></div><div class="indicator-bar-track"><div class="indicator-bar-fill" style="--bar-color:${color};width:${n/max*100}%"></div></div></div>`;
+   return `<div class="indicator-bar-row"><div class="indicator-bar-info"><span>${esc(name)}</span><strong>${n} <small>(${total?Math.round(n/total*100):0}%)</small></strong></div><div class="indicator-bar-track"><div class="indicator-bar-fill" style="width:${(n/max*100).toFixed(2)}%;background-color:${color}!important" role="img" aria-label="${esc(name)}: ${n} chamado(s), ${total?Math.round(n/total*100):0}%"></div></div></div>`;
   }).join(''):'<div class="empty">Sem chamados no período</div>';
  };
  const kpis=[
@@ -198,7 +198,7 @@ function dashboardPage(){
  topFilter+
  `<section class="dash-summary-band">${kpis.map(([kind,name,value])=>`<div class="dash-summary-item">${indicatorIcon(kind)}<div><span>${name}</span><strong>${value}</strong></div></div>`).join('')}</section>`+
  cardsTop+
- `<div class="dash-bottom-grid"><div class="dash-bottom-main">${peopleTable}${insight}${feedback}</div><div class="dash-bottom-side">${statusCard}${categoryCard}</div></div>`;
+ `<div class="dash-analysts-full">${peopleTable}</div><div class="dash-bottom-grid"><div class="dash-bottom-main">${insight}${feedback}</div><div class="dash-bottom-side">${statusCard}${categoryCard}</div></div>`;
 }
 function usersPage(){
  const roleLabel={ADMIN:'Administrador',ANALISTA:'Analista de TI',COLABORADOR:'Colaborador'};
