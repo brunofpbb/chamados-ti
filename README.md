@@ -147,3 +147,10 @@ O serviço web verifica lembretes pendentes a cada **15 minutos**, iniciando log
 - O Brevo possui timeout de 20 segundos para não bloquear o processamento. Um erro muito raro entre aceitação do envio e confirmação no banco ainda pode causar reenvio, como ocorre em filas com entrega pelo menos uma vez.
 - Para pausar, definir `REMINDERS_ENABLED=false` no ambiente Railway e reiniciar. Por padrão permanece ativo.
 - Na primeira implantação, chamados que já estavam aguardando recebem `waiting_since=now()` para não disparar lembretes antigos em massa.
+
+## Notificações de abertura e histórico de atribuições
+- Ao criar um chamado, o solicitante real continua recebendo a confirmação de abertura.
+- Após a gravação bem-sucedida, analistas e administradores **ativos, não-testes**, de todas as empresas, recebem via Brevo uma comunicação com número, solicitante, empresa, assunto, categoria, prioridade, status e link para o portal.
+- O aviso é consolidado por endereço de e-mail em minúsculas para não enviar cópias repetidas quando várias contas compartilham o mesmo e-mail; se o solicitante também usa esse endereço, prevalece a confirmação do próprio solicitante.
+- Contas de teste não recebem e-mail, pois não possuem caixa de correio válida. Falhas de envio da notificação para a equipe são registradas no log e não desfazem o chamado.
+- A partir dessa atualização, o histórico da atribuição registra o **nome** do antigo e do novo responsável (incluindo `Não atribuído`) em vez dos IDs internos. Os registros históricos anteriores não são alterados.
