@@ -155,11 +155,19 @@ function dashboardPage(){
  const fmtRating=n=>n==null?'—':Number(n).toLocaleString('pt-BR',{maximumFractionDigits:1})+' / 5';
  const statusesColors={ABERTO:'#2459a1',EM_ATENDIMENTO:'#006b62',AGUARDANDO_USUARIO:'#d3a130',RESOLVIDO:'#16934e',CANCELADO:'#76818a'};
  const prioritiesColors={BAIXA:'#869a8b',NORMAL:'#198651',ALTA:'#d78b1d',CRITICA:'#c7352d'};
- const bars=(items,describe,colorFor)=>{
-  const max=Math.max(1,...items.map(x=>Number(x.total||0)));
-  return items.length?items.map(x=>{
-   const n=Number(x.total||0),name=describe(x),color=colorFor(x);
-   return `<div class="indicator-bar-row"><div class="indicator-bar-info"><span>${esc(name)}</span><strong>${n} <small>(${total?Math.round(n/total*100):0}%)</small></strong></div><div class="indicator-bar-track"><div class="indicator-bar-fill" style="width:${(n/max*100).toFixed(2)}%;background-color:${color}!important" role="img" aria-label="${esc(name)}: ${n} chamado(s), ${total?Math.round(n/total*100):0}%"></div></div></div>`;
+ const bars=(items,describe,type='general')=>{
+  // O servidor usa CSP sem estilos inline. Barras nativas preservam cor e
+  // proporção dos dados sem depender de style="" ou de relaxar a política.
+  const totalInChart=Math.max(1,items.reduce((sum,item)=>sum+Math.max(0,Number(item.total)||0),0));
+  return items.length?items.map((x,index)=>{
+   const n=Math.max(0,Number(x.total)||0),name=describe(x);
+   const key=type==='priority'&&Object.hasOwn(prioritiesColors,String(x.urgency).toUpperCase())?
+    'priority-'+String(x.urgency).toUpperCase():
+    type==='status'&&Object.hasOwn(statusesColors,String(x.status).toUpperCase())?
+    'status-'+String(x.status).toUpperCase():
+    'series-'+(index%5);
+   const pct=Math.round(n/totalInChart*100);
+   return `<div class="indicator-bar-row"><div class="indicator-bar-info"><span>${esc(name)}</span><strong>${n} <small>(${pct}%)</small></strong></div><progress class="indicator-progress ${key}" value="${n}" max="${totalInChart}" aria-label="${esc(name)}: ${n} chamado(s), ${pct}%"></progress></div>`;
   }).join(''):'<div class="empty">Sem chamados no período</div>';
  };
  const kpis=[
@@ -184,13 +192,13 @@ function dashboardPage(){
  }).join('')||'<tr><td colspan="11" class="empty">Sem analistas cadastrados</td></tr>'}</tbody></table></div><p class="dashboard-note">Compartilhados / contribuições: quantidade de chamados compartilhados em que o analista escreveu mensagens / total de mensagens nesses chamados. Não conta apenas o convite. As demais métricas de resolução consideram o responsável principal atual.</p></section>`;
  const card=(title,kind,content,extra='')=>`<section class="card dash-chart-card ${extra}"><div class="dash-section-title">${indicatorIcon(kind)}<h2>${title}</h2></div>${content}</section>`;
  const cardsTop=`<div class="dash-chart-grid">
- ${card('Chamados por empresa','company',bars(dashboard.units||[],x=>companyLabel(x.company_code),()=> '#08763e'))}
- ${card('Prioridades dos chamados','flag',bars(dashboard.priorities||[],x=>({BAIXA:'Baixa',NORMAL:'Normal',ALTA:'Alta',CRITICA:'Crítica'}[x.urgency]||x.urgency),x=>prioritiesColors[x.urgency]||'#08763e'))}
+ ${card('Chamados por empresa','company',bars(dashboard.units||[],x=>companyLabel(x.company_code),'general'))}
+ ${card('Prioridades dos chamados','flag',bars(dashboard.priorities||[],x=>({BAIXA:'Baixa',NORMAL:'Normal',ALTA:'Alta',CRITICA:'Crítica'}[x.urgency]||x.urgency),'priority'))}
  ${card('Evolução diária de aberturas','trend',dashboardDailyChart(dashboard.daily||[]),'dash-daily-card')}
  ${card('Idade dos chamados pendentes','hour',`<div class="aging-grid"><div><strong>${Number(aging.older_24h||0)}</strong><span>Mais de 24 horas</span></div><div><strong>${Number(aging.older_48h||0)}</strong><span>Mais de 48 horas</span></div><div><strong>${Number(aging.older_7d||0)}</strong><span>Mais de 7 dias</span></div></div><p class="dashboard-note">Tempo corrido desde a abertura, sem SLA contratual.</p>`)}
  </div>`;
- const statusCard=card('Chamados por situação','status',bars(dashboard.statuses||[],x=>label(x.status),x=>statusesColors[x.status]||'#08763e'));
- const categoryCard=card('Categorias mais solicitadas','category',bars(dashboard.categories||[],x=>x.category,()=> '#21925b'));
+ const statusCard=card('Chamados por situação','status',bars(dashboard.statuses||[],x=>label(x.status),'status'));
+ const categoryCard=card('Categorias mais solicitadas','category',bars(dashboard.categories||[],x=>x.category,'general'));
  const sharingTotal=people.reduce((v,p)=>v+Number(p.shared_contributions||0),0);
  const contributors=[...people].sort((a,b)=>Number(b.shared_contributions||0)-Number(a.shared_contributions||0));
  const insight=`<section class="card dash-insights"><div class="dash-section-title">${indicatorIcon('insight')}<h2>Destaques do período</h2></div><div class="dash-insight-grid"><div><small>Chamados resolvidos</small><strong>${resolved}</strong><span>do total de ${total} aberturas</span></div><div><small>Resolução média</small><strong>${fmtHours(o.avg_resolution_hours)}</strong><span>da abertura à resolução</span></div><div><small>Maior taxa de resolução</small><strong>${people.filter(p=>Number(p.total_assigned||0)>0).length?Math.max(...people.filter(p=>Number(p.total_assigned||0)>0).map(p=>Math.round(Number(p.resolved||0)/Number(p.total_assigned||1)*100)))+'%':'—'}</strong><span>entre analistas com atribuições</span></div><div><small>Mensagens em compartilhados</small><strong>${sharingTotal}</strong><span>${esc(contributors[0]?.shared_contributions>0?contributors[0].name:'Sem contribuições registradas')}</span></div></div></section>`;
