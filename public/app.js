@@ -153,8 +153,8 @@ function dashboardPage(){
  const people=dashboard.analysts||[];
  const fmtHours=h=>h==null?'—':Number(h).toLocaleString('pt-BR',{maximumFractionDigits:1})+' h';
  const fmtRating=n=>n==null?'—':Number(n).toLocaleString('pt-BR',{maximumFractionDigits:1})+' / 5';
- const statusesColors={ABERTO:'#7253ba',EM_ATENDIMENTO:'#2477d3',AGUARDANDO_USUARIO:'#e5a515',RESOLVIDO:'#16934e',CANCELADO:'#d45841'};
- const prioritiesColors={BAIXA:'#6f9980',NORMAL:'#139f83',ALTA:'#e78a21',CRITICA:'#d84542'};
+ const statusesColors={ABERTO:'#2459a1',EM_ATENDIMENTO:'#006b62',AGUARDANDO_USUARIO:'#d3a130',RESOLVIDO:'#16934e',CANCELADO:'#76818a'};
+ const prioritiesColors={BAIXA:'#869a8b',NORMAL:'#198651',ALTA:'#d78b1d',CRITICA:'#c7352d'};
  const bars=(items,describe,colorFor)=>{
   const max=Math.max(1,...items.map(x=>Number(x.total||0)));
   return items.length?items.map(x=>{
