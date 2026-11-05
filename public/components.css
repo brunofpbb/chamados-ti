@@ -649,3 +649,25 @@ th[aria-sort="ascending"] .ticket-sort-indicator,th[aria-sort="descending"] .tic
 @media(prefers-reduced-motion:reduce){
  .indicator-progress::-webkit-progress-value,.indicator-progress::-moz-progress-bar{transition:none}
 }
+
+/* Evolução diária: gráfico maior, escala proporcional e datas legíveis. */
+.dash-daily-card .dashboard-sparkline{
+ display:block;width:100%;height:auto;min-height:215px;max-height:none;
+ margin:8px auto 0;
+}
+.dash-daily-card{display:flex;flex-direction:column}
+.dash-daily-card .dash-section-title{margin-bottom:8px}
+@media(min-width:1150px){
+ .dash-daily-card .dashboard-sparkline{min-height:215px;max-height:270px}
+}
+@media(max-width:760px){
+ .dash-daily-card .dashboard-sparkline{min-height:225px}
+}
+/* Reabertura pelo solicitante: disponível somente para ticket resolvido dentro do prazo. */
+.ticket-reopen{border:1px solid #d7e8dd;background:#fbfefb}
+.reopen-title{display:flex;align-items:flex-start;gap:13px;margin-bottom:15px}
+.reopen-title h2{font-size:18px;margin:0 0 6px;color:#124c2b}
+.reopen-title p{color:#5c7363;font-size:13px;line-height:1.5;margin:0}
+.reopen-icon{display:flex;align-items:center;justify-content:center;flex:0 0 42px;height:42px;border-radius:12px;background:#e4f4e8;color:#00642f;font-size:28px;font-weight:600}
+.ticket-reopen .field textarea{min-height:95px;resize:vertical}
+.ticket-reopen .reopen-button{border-color:#9dc9ab;color:#005b28}
