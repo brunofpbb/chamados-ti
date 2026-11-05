@@ -332,6 +332,9 @@ app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
    count(t.id) FILTER (WHERE t.status='RESOLVIDO')::int resolved,
    count(t.id) FILTER (WHERE t.status IN ('ABERTO','EM_ATENDIMENTO','AGUARDANDO_USUARIO'))::int active,
    count(t.id) FILTER (WHERE t.status='AGUARDANDO_USUARIO')::int waiting,
+   max(share_stats.shared_tickets)::int AS shared_tickets,
+   max(share_stats.shared_tickets_contributed)::int AS shared_tickets_contributed,
+   max(share_stats.shared_contributions)::int AS shared_contributions,
    count(v.ticket_id)::int reviews_count,
    round(avg(v.rating)::numeric,2) AS avg_rating,
    round(avg(v.solution_rating)::numeric,2) AS avg_solution_rating,
@@ -346,6 +349,22 @@ app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
       WHERE i.ticket_id=t.id AND i.kind='MENSAGEM' AND author.role IN ('ADMIN','ANALISTA')
         AND i.author_id<>t.requester_id
    ) fr ON true
+   LEFT JOIN LATERAL (
+     SELECT count(*)::int shared_tickets,
+            count(*) FILTER (WHERE contributions>0)::int shared_tickets_contributed,
+            coalesce(sum(contributions),0)::int shared_contributions
+     FROM (
+       SELECT c.ticket_id,
+         (SELECT count(*)::int FROM interacoes i WHERE i.ticket_id=c.ticket_id
+            AND i.author_id=u.id AND i.kind='MENSAGEM') AS contributions
+       FROM chamados_compartilhados c
+       JOIN chamados shared_ticket ON shared_ticket.id=c.ticket_id
+       WHERE c.user_id=u.id
+         AND ($1::int IS NULL OR shared_ticket.created_at >= now()-($1::int*interval '1 day'))
+         AND ($2::text IS NULL OR shared_ticket.company_code=$2)
+         AND ($4::text IS NULL OR shared_ticket.category=$4)
+     ) shared_rows
+   ) share_stats ON true
    WHERE u.role IN ('ADMIN','ANALISTA') AND ($3::bigint IS NULL OR u.id=$3)
    GROUP BY u.id,u.name,u.company_code,u.role
    ORDER BY resolved DESC,total_assigned DESC,u.name`,[...params]),
