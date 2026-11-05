@@ -671,3 +671,32 @@ th[aria-sort="ascending"] .ticket-sort-indicator,th[aria-sort="descending"] .tic
 .reopen-icon{display:flex;align-items:center;justify-content:center;flex:0 0 42px;height:42px;border-radius:12px;background:#e4f4e8;color:#00642f;font-size:28px;font-weight:600}
 .ticket-reopen .field textarea{min-height:95px;resize:vertical}
 .ticket-reopen .reopen-button{border-color:#9dc9ab;color:#005b28}
+
+/* Indicadores: os dois cards da coluna esquerda acompanham a altura total da direita. */
+@media(min-width:1101px){
+ .dash-bottom-grid{align-items:stretch}
+ .dash-bottom-grid>.dash-bottom-main,
+ .dash-bottom-grid>.dash-bottom-side{height:100%;min-height:0}
+ .dash-bottom-grid>.dash-bottom-main{display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:15px}
+ .dash-bottom-grid>.dash-bottom-main>.card{height:100%;min-height:0;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center}
+ .dash-bottom-grid>.dash-bottom-main>.dash-insights .dash-insight-grid,
+ .dash-bottom-grid>.dash-bottom-main>.dashboard-feedback .feedback-values{width:100%}
+}
+@media(max-width:1100px){
+ .dash-bottom-grid{align-items:start}
+ .dash-bottom-grid>.dash-bottom-main>.card{height:auto;min-height:0}
+}
+/* Preenche o card de idade com números maiores e caixas mais espaçosas. */
+.dash-chart-grid>.dash-chart-card:has(.aging-grid){display:flex;flex-direction:column}
+.dash-chart-grid>.dash-chart-card .aging-grid{flex:1 1 auto;min-height:0;align-items:stretch;gap:10px}
+.dash-chart-grid>.dash-chart-card .aging-grid>div{
+ display:flex;flex-direction:column;align-items:center;justify-content:center;
+ gap:8px;min-height:158px;padding:18px 8px;
+}
+.dash-chart-grid>.dash-chart-card .aging-grid strong{font-size:clamp(30px,2.5vw,43px);line-height:1.1}
+.dash-chart-grid>.dash-chart-card .aging-grid span{font-size:clamp(11px,1vw,13px);line-height:1.4;margin:0}
+@media(max-width:760px){
+ .dash-chart-grid>.dash-chart-card .aging-grid>div{min-height:135px;padding:14px 5px}
+ .dash-chart-grid>.dash-chart-card .aging-grid strong{font-size:32px}
+ .dash-chart-grid>.dash-chart-card .aging-grid span{font-size:11px}
+}
