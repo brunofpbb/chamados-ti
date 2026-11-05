@@ -618,3 +618,34 @@ th[aria-sort="ascending"] .ticket-sort-indicator,th[aria-sort="descending"] .tic
  .dash-chart-grid{grid-template-columns:1fr}
  .dash-summary-band{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Barras dos indicadores: <progress> respeita CSP (style-src 'self').
+   O preenchimento representa a parcela real de cada grupo no total
+   daquele gráfico, não a maior categoria como 100%. */
+.indicator-progress{
+ display:block;box-sizing:border-box;width:100%;height:10px;max-width:100%;
+ margin:0;padding:0;border:0;border-radius:999px;
+ appearance:none;-webkit-appearance:none;-moz-appearance:none;
+ overflow:hidden;background:#e7eee9;color:#147c47;
+ --progress-color:#147c47
+}
+.indicator-progress::-webkit-progress-bar{background:#e7eee9;border-radius:999px}
+.indicator-progress::-webkit-progress-value{background:var(--progress-color);border-radius:999px;transition:width .3s ease}
+.indicator-progress::-moz-progress-bar{background:var(--progress-color);border-radius:999px;transition:width .3s ease}
+.indicator-progress.priority-BAIXA{--progress-color:#869a8b;color:#869a8b}
+.indicator-progress.priority-NORMAL{--progress-color:#198651;color:#198651}
+.indicator-progress.priority-ALTA{--progress-color:#d78b1d;color:#d78b1d}
+.indicator-progress.priority-CRITICA{--progress-color:#c7352d;color:#c7352d}
+.indicator-progress.status-ABERTO{--progress-color:#2459a1;color:#2459a1}
+.indicator-progress.status-EM_ATENDIMENTO{--progress-color:#006b62;color:#006b62}
+.indicator-progress.status-AGUARDANDO_USUARIO{--progress-color:#d3a130;color:#d3a130}
+.indicator-progress.status-RESOLVIDO{--progress-color:#16934e;color:#16934e}
+.indicator-progress.status-CANCELADO{--progress-color:#76818a;color:#76818a}
+.indicator-progress.series-0{--progress-color:#08763e;color:#08763e}
+.indicator-progress.series-1{--progress-color:#2f9772;color:#2f9772}
+.indicator-progress.series-2{--progress-color:#5c9f8d;color:#5c9f8d}
+.indicator-progress.series-3{--progress-color:#6b8878;color:#6b8878}
+.indicator-progress.series-4{--progress-color:#a3b68d;color:#a3b68d}
+@media(prefers-reduced-motion:reduce){
+ .indicator-progress::-webkit-progress-value,.indicator-progress::-moz-progress-bar{transition:none}
+}
