@@ -287,6 +287,34 @@ app.get('/api/notifications',auth,safe(async(req,res)=>{
  const q=await pool.query("SELECT t.id,t.subject,t.resolved_at,t.resolution_summary,t.assignee_id,a.name AS assignee_name,round((extract(epoch FROM(t.resolved_at-t.created_at))/3600)::numeric,1) AS duration_hours FROM chamados t LEFT JOIN avaliacoes_chamados v ON v.ticket_id=t.id LEFT JOIN usuarios a ON a.id=t.assignee_id WHERE t.requester_id=$1 AND t.status='RESOLVIDO' AND v.ticket_id IS NULL ORDER BY t.resolved_at DESC LIMIT 30",[req.user.id]);
  res.json({pending:q.rowCount,items:q.rows});
 }));
+// Reabertura pelo solicitante: mesma solicitação, sem perder histórico/participantes.
+app.post('/api/tickets/:id/reopen',auth,ticketAccess,safe(async(req,res)=>{
+ const reason=String(req.body?.reason||'').trim();
+ if(reason.length<10||reason.length>2000)return res.status(400).json({erro:'Explique o que não funcionou (10 a 2.000 caracteres)'});
+ if(String(req.user.id)!==String(req.ticket.requester_id))return res.status(403).json({erro:'Somente quem abriu o chamado pode reabri-lo'});
+ const client=await pool.connect();
+ let nextStatus;
+ try{
+  await client.query('BEGIN');
+  const current=await client.query('SELECT status,requester_id,assignee_id,resolved_at FROM chamados WHERE id=$1 FOR UPDATE',[req.ticket.id]);
+  if(!current.rowCount)throw Object.assign(new Error('Chamado não encontrado'),{status:404});
+  const ticket=current.rows[0];
+  if(String(ticket.requester_id)!==String(req.user.id))throw Object.assign(new Error('Sem permissão para reabrir este chamado'),{status:403});
+  if(ticket.status!=='RESOLVIDO')throw Object.assign(new Error('Somente chamados resolvidos podem ser reabertos'),{status:409});
+  if(!ticket.resolved_at||Date.now()-new Date(ticket.resolved_at).getTime()>72*3600000)throw Object.assign(new Error('O prazo de reabertura de 72 horas após a resolução terminou. Abra um novo chamado.'),{status:409});
+  nextStatus=ticket.assignee_id?'EM_ATENDIMENTO':'ABERTO';
+  await client.query("UPDATE chamados SET status=$1,resolved_at=NULL,updated_at=now(),waiting_since=NULL WHERE id=$2",[nextStatus,req.ticket.id]);
+  await client.query("INSERT INTO interacoes(ticket_id,author_id,kind,body,visibility) VALUES($1,$2,'ALTERACAO',$3,'SOLICITANTE')",
+   [req.ticket.id,req.user.id,'Chamado reaberto pelo solicitante: Resolvido → '+statusTitle(nextStatus)+'. Motivo: '+reason]);
+  await client.query('COMMIT');
+ }catch(e){
+  await client.query('ROLLBACK');
+  if(e.status)return res.status(e.status).json({erro:e.message});
+  throw e;
+ }finally{client.release();}
+ notifyTicketParticipants(req.ticket.id,req.ticket.requester_id,'Chamado #'+String(req.ticket.id).padStart(5,'0')+' reaberto',`<p>O solicitante <strong>${esc(req.ticket.requester_name)}</strong> reabriu o chamado <strong>#${String(req.ticket.id).padStart(5,'0')}</strong>.</p><p><strong>Assunto:</strong> ${esc(req.ticket.subject)}</p><p><strong>Motivo:</strong> ${esc(reason)}</p><p><strong>Nova situação:</strong> ${esc(statusTitle(nextStatus))}</p><p><a href="${esc(publicUrl)}">Acompanhar no portal</a></p>`).catch(console.error);
+ res.json({ok:true,status:nextStatus});
+}));
 app.post('/api/tickets/:id/review',auth,ticketAccess,safe(async(req,res)=>{
  if(req.user.role!=='COLABORADOR'&&String(req.user.id)!==String(req.ticket.requester_id))return res.status(403).json({erro:'Somente o solicitante pode avaliar'});
  if(String(req.user.id)!==String(req.ticket.requester_id))return res.status(403).json({erro:'Somente o solicitante pode avaliar'});
