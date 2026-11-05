@@ -154,3 +154,10 @@ O serviço web verifica lembretes pendentes a cada **15 minutos**, iniciando log
 - O aviso é consolidado por endereço de e-mail em minúsculas para não enviar cópias repetidas quando várias contas compartilham o mesmo e-mail; se o solicitante também usa esse endereço, prevalece a confirmação do próprio solicitante.
 - Contas de teste não recebem e-mail, pois não possuem caixa de correio válida. Falhas de envio da notificação para a equipe são registradas no log e não desfazem o chamado.
 - A partir dessa atualização, o histórico da atribuição registra o **nome** do antigo e do novo responsável (incluindo `Não atribuído`) em vez dos IDs internos. Os registros históricos anteriores não são alterados.
+
+## Indicadores — reformulação do dashboard
+- Dashboard administrativo com faixa de KPIs, cartões de empresas e prioridades, gráfico diário, idade das pendências, desempenho dos analistas, situações, categorias, avaliações e destaques.
+- Cores das barras de prioridade/status seguem a identificação utilizada nos chamados; demais barras usam verde Turin. Alturas e larguras de barras representam os valores reais retornados pela API.
+- Contribuições em compartilhados: `shared_tickets` = chamados compartilhados com o usuário; `shared_tickets_contributed` = chamados compartilhados em que ele escreveu alguma mensagem após o convite; `shared_contributions` = total de mensagens nesses chamados após o compartilhamento. Esses indicadores respeitam período de abertura, empresa e categoria, inclusive quando o responsável principal do chamado é outro usuário.
+- Indicadores de atribuições, resolução, avaliações e médias continuam vinculados ao responsável principal atual. A filtragem por analista não interfere na contagem de participações como apoio do usuário selecionado.
+- Não foram adicionadas variações fictícias frente ao período anterior: o dashboard exibe os valores e taxas efetivamente calculados pelo banco.
