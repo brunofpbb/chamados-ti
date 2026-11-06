@@ -261,12 +261,14 @@ app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{
   // Analistas podem assumir um chamado sem responsável, mas nunca atribuir
   // a terceiros, remover ou trocar um responsável já designado.
   // A checagem acontece sob FOR UPDATE para impedir corridas entre analistas.
-  if(req.user.role==='ANALISTA' && String(assignee??'')!==String(current.assignee_id??'')){
-   if(current.assignee_id!==null || String(assignee)!==String(req.user.id)){
+  const assigneeWasProvided=Object.prototype.hasOwnProperty.call(req.body||{},'assigneeId');
+  const requestedAssignee=assigneeWasProvided?assignee:current.assignee_id;
+  if(req.user.role==='ANALISTA' && String(requestedAssignee??'')!==String(current.assignee_id??'')){
+   if(current.assignee_id!==null || String(requestedAssignee)!==String(req.user.id)){
     throw Object.assign(new Error('Apenas administradores podem atribuir ou trocar o responsável de outro analista. Você só pode assumir chamados sem responsável.'),{status:403});
    }
   }
-  const actualAssignee=isManager?assignee:current.assignee_id;
+  const actualAssignee=isManager?requestedAssignee:current.assignee_id;
   nextStatus=requestedStatus;
   // Atribuir um chamado aberto assume o atendimento, sem sobrescrever outro status escolhido.
   const automaticallyAssumed=isManager&&oldStatus==='ABERTO'&&requestedStatus==='ABERTO'&&actualAssignee!==null&&String(actualAssignee)!==String(current.assignee_id);
