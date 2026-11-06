@@ -27,9 +27,17 @@ async function auth(req,res,next){try{const raw=req.cookies.turin_ti||'',split=r
  req.user=u;next();}catch(e){next(e);}}
 const manager=(req,res,next)=>['ANALISTA','ADMIN'].includes(req.user.role)?next():res.status(403).json({erro:'Acesso restrito à equipe de TI'});
 const admin=(req,res,next)=>req.user.role==='ADMIN'?next():res.status(403).json({erro:'Apenas administrador'});
-const throttle=rateLimit({windowMs:15*60000,limit:15,standardHeaders:'draft-7',legacyHeaders:false});
+const throttle=rateLimit({windowMs:15*60000,limit:15,standardHeaders:'draft-7',legacyHeaders:false,
+ message:{erro:'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.'}});
+// A consulta de empresas/funcionários dispara várias pesquisas durante a digitação.
+// Não deve consumir a mesma cota de convites ou tentativas de autenticação.
+const lookupThrottle=rateLimit({windowMs:15*60000,limit:120,standardHeaders:'draft-7',legacyHeaders:false,
+ message:{erro:'Muitas consultas ao cadastro. Aguarde alguns minutos e tente novamente.'}});
+const inviteThrottle=rateLimit({windowMs:15*60000,limit:12,standardHeaders:'draft-7',legacyHeaders:false,
+ keyGenerator:req=>'admin:'+String(req.user.id),
+ message:{erro:'Limite de 12 convites por administrador em 15 minutos. Aguarde e tente novamente.'}});
 app.get('/api/health',safe(async(req,res)=>{await pool.query('SELECT 1');res.json({ok:true});}));
-app.get('/api/public/companies',throttle,safe(async(req,res)=>res.json(await alter.companies())));
+app.get('/api/public/companies',lookupThrottle,safe(async(req,res)=>res.json(await alter.companies())));
 app.get('/api/public/identify',throttle,safe(async(req,res)=>{
  const company=String(req.query.company||'').trim(),cpf=String(req.query.cpf||'').replace(/\D/g,'');
  if(!/^\d{11}$/.test(cpf))return res.status(400).json({erro:'CPF inválido'});
@@ -39,7 +47,7 @@ app.get('/api/public/identify',throttle,safe(async(req,res)=>{
  if(!employee)return res.status(404).json({erro:'Nenhum vínculo ativo localizado'});
  return res.json({name:employee.name,active:true});
 }));
-app.get('/api/public/employees',throttle,safe(async(req,res)=>{const company=String(req.query.company||''),term=String(req.query.term||'').trim();if(!company||term.length<3)return res.json([]);const companies=await alter.companies();if(!companies.some(c=>c.code===company))return res.status(400).json({erro:'Empresa inválida'});const list=await alter.employees(company,term);res.json(list.map(alter.normalize).filter(e=>e.active&&e.name.toLocaleLowerCase('pt-BR').includes(term.toLocaleLowerCase('pt-BR'))).slice(0,20).map(e=>({id:e.id,name:e.name})));}));
+app.get('/api/public/employees',lookupThrottle,safe(async(req,res)=>{const company=String(req.query.company||''),term=String(req.query.term||'').trim();if(!company||term.length<3)return res.json([]);const companies=await alter.companies();if(!companies.some(c=>c.code===company))return res.status(400).json({erro:'Empresa inválida'});const list=await alter.employees(company,term);res.json(list.map(alter.normalize).filter(e=>e.active&&e.name.toLocaleLowerCase('pt-BR').includes(term.toLocaleLowerCase('pt-BR'))).slice(0,20).map(e=>({id:e.id,name:e.name})));}));
 async function tokenFor(user,purpose){const raw=crypto.randomBytes(32).toString('base64url');await pool.query('INSERT INTO tokens_acesso(user_id,token_hash,purpose,expires_at) VALUES($1,$2,$3,now()+interval \'30 minutes\')',[user.id,sha(raw),purpose]);return raw;}
 const link=(token)=>new URL('/?token='+encodeURIComponent(token),publicUrl).toString();
 app.post('/api/public/register',throttle,safe(async(req,res)=>{
@@ -485,7 +493,7 @@ app.post('/api/admin/users/:id/invite',auth,admin,throttle,safe(async(req,res)=>
  await send(u.email,'Convite de acesso | Chamados TI Turin',`<p>Olá, ${esc(u.name)}!</p><p>Login: <b>${esc(u.login)}</b></p><p><a href="${esc(link(token))}">Criar ou redefinir senha</a></p><p>Este convite expira em 30 minutos.</p>`);
  res.json({ok:true});
 }));
-app.post('/api/admin/invite',auth,admin,throttle,safe(async(req,res)=>{
+app.post('/api/admin/invite',auth,admin,inviteThrottle,safe(async(req,res)=>{
  const company=String(req.body?.company||''),eid=String(req.body?.employeeId||'');
  const email=String(req.body?.email||'').trim().toLowerCase();
  const role=String(req.body?.role||'ANALISTA');
