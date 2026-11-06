@@ -741,3 +741,6 @@ th[aria-sort="ascending"] .ticket-sort-indicator,th[aria-sort="descending"] .tic
 .ticket-manage-form .field:has(.analyst-assignee-readonly)>small{
  display:block;margin-top:7px;font-size:12px;line-height:1.45;color:#697f6f
 }
+
+/* Convite de funcionário: largura controlada por CSS externo, compatível com CSP. */
+.invite-card{width:100%;max-width:760px;box-sizing:border-box}
