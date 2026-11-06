@@ -744,3 +744,13 @@ th[aria-sort="ascending"] .ticket-sort-indicator,th[aria-sort="descending"] .tic
 
 /* Convite de funcionário: largura controlada por CSS externo, compatível com CSP. */
 .invite-card{width:100%;max-width:760px;box-sizing:border-box}
+
+/* Formulários desktop: recuperam a largura da área principal após correção do grid.
+   Mantêm margens e espaçamento responsivos sem provocar rolagem horizontal. */
+@media(min-width:1001px){
+ .main>.new-ticket-card{width:100%;max-width:none;min-width:0}
+ .main>.invite-card{width:100%;max-width:1200px;min-width:0}
+}
+@media(min-width:761px) and (max-width:1000px){
+ .main>.new-ticket-card,.main>.invite-card{width:100%;max-width:100%;min-width:0}
+}
