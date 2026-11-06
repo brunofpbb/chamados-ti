@@ -730,3 +730,14 @@ th[aria-sort="ascending"] .ticket-sort-indicator,th[aria-sort="descending"] .tic
  .dash-bottom-main .feedback-values strong{font-size:25px}
  .dash-bottom-main .feedback-values>div{padding:18px}
 }
+
+/* Analistas visualizam o responsável; apenas administradores podem trocá-lo. */
+.analyst-assignee-readonly{
+ box-sizing:border-box;width:100%;min-height:44px;display:flex;align-items:center;
+ padding:10px 13px;margin:0;border:1px solid #d9e8dd;border-radius:10px;
+ background:#f4f9f5;color:#184a2e;font-size:13px;font-weight:700;
+ overflow-wrap:anywhere
+}
+.ticket-manage-form .field:has(.analyst-assignee-readonly)>small{
+ display:block;margin-top:7px;font-size:12px;line-height:1.45;color:#697f6f
+}
