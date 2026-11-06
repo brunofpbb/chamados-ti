@@ -677,8 +677,11 @@ th[aria-sort="ascending"] .ticket-sort-indicator,th[aria-sort="descending"] .tic
  .dash-bottom-grid{align-items:stretch}
  .dash-bottom-grid>.dash-bottom-main,
  .dash-bottom-grid>.dash-bottom-side{height:100%;min-height:0}
- .dash-bottom-grid>.dash-bottom-main{display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:15px}
- .dash-bottom-grid>.dash-bottom-main>.card{height:100%;min-height:0;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center}
+ .dash-bottom-grid>.dash-bottom-main,
+ .dash-bottom-grid>.dash-bottom-side{display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:15px;align-items:stretch}
+ .dash-bottom-grid>.dash-bottom-main>.card,
+ .dash-bottom-grid>.dash-bottom-side>.card{height:100%;min-height:0;box-sizing:border-box}
+ .dash-bottom-grid>.dash-bottom-main>.card{display:flex;flex-direction:column;justify-content:center}
  .dash-bottom-grid>.dash-bottom-main>.dash-insights .dash-insight-grid,
  .dash-bottom-grid>.dash-bottom-main>.dashboard-feedback .feedback-values{width:100%}
 }
