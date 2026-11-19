@@ -120,8 +120,8 @@
 /* Campo de senha com ação de visibilidade acessível. */
 .password-control{position:relative;display:flex;align-items:center;min-width:0}
 .password-control>input{width:100%;padding-right:48px!important;font-weight:400}
-.password-toggle{position:absolute;right:7px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;min-width:32px;min-height:32px;box-sizing:border-box;border:0;border-radius:7px;background:#e6f2e9;padding:0;color:#005b28;box-shadow:none;cursor:pointer}
-.password-toggle:hover,.password-toggle:focus-visible{background:#e6f2e9;outline-offset:1px}
+.password-toggle{position:absolute;right:7px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;min-width:32px;min-height:32px;box-sizing:border-box;border:0;border-radius:7px;background:transparent;padding:0;color:#005b28;box-shadow:none;cursor:pointer}
+.password-toggle:hover,.password-toggle:focus-visible{background:transparent;outline-offset:1px}
 .password-eye{font-size:15px;line-height:1}
 
 /* Notificações globais e transitórias, sem alterar nem limpar formulários. */
@@ -759,4 +759,4 @@ th[aria-sort="ascending"] .ticket-sort-indicator,th[aria-sort="descending"] .tic
 }
 
 .password-toggle .password-eye{display:block;width:18px;height:18px;flex:none;pointer-events:none}
-.password-toggle:hover{background:#d6e9df;transform:translateY(-50%)}
+.password-toggle:hover{background:transparent;transform:translateY(-50%)}
