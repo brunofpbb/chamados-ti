@@ -5,7 +5,7 @@ async function get(path){
  const r=await fetch(base+path,{headers:process.env.ALTERDATA_PROXY_KEY?{'X-Proxy-Key':process.env.ALTERDATA_PROXY_KEY}:{},signal:AbortSignal.timeout(12000)});
  if(!r.ok)throw Error('Alterdata indisponível ('+r.status+')');return r.json();
 }
-const companies=async()=>{const v=await get('/empresas');if(!Array.isArray(v))throw Error('Empresas inválidas');return v.map(x=>({code:String(x.codigo_empresa??x.codigo??''),name:String(x.fantasia??x.razao_social??x.nome_fantasia??x.nome??x.descricao??x.codigo_empresa)})).filter(x=>x.code);};
+const companies=async()=>{const v=await get('/empresas');if(!Array.isArray(v))throw Error('Empresas inválidas');return v.map(x=>({code:String(x.codigo_empresa??x.codigo??''),name:[x.fantasia,x.nome_fantasia,x.razao_social,x.nome,x.descricao,x.codigo_empresa,x.codigo].map(v=>String(v??'').trim()).find(Boolean)||''})).filter(x=>x.code);};
 const employees=async(company,term='',situacao='ativos')=>{const v=await get('/empresas/'+encodeURIComponent(company)+'/funcionarios?'+new URLSearchParams({busca:term,situacao}));if(!Array.isArray(v))throw Error('Funcionários inválidos');return v;};
 function normalize(e){
  const id=e.idfuncionario??e.idFuncionario??e.funcionario_id??e.id;
@@ -37,4 +37,32 @@ async function findActive(company,id,term='',cpfHash=null,hashCpf=null){
  if(cpfHash&&(!found.cpf||typeof hashCpf!=='function'||hashCpf(found.cpf)!==cpfHash))return null;
  return found;
 }
-module.exports={companies,employees,normalize,findActive,findActiveByCpf};
+// Lista elegível para novos vínculos. Cache somente de código e nome.
+let activeCompaniesCache=null,activeCompaniesPending=null;
+async function activeCompanies(){
+ if(activeCompaniesCache&&Date.now()<activeCompaniesCache.expires)return activeCompaniesCache.items;
+ if(activeCompaniesPending)return activeCompaniesPending;
+ activeCompaniesPending=(async()=>{
+  const catalog=await companies(),result=new Array(catalog.length);
+  let index=0,failures=0;
+  async function worker(){
+   while(index<catalog.length){
+    const i=index++,company=catalog[i];
+    try{
+     const rows=await employees(company.code,'','ativos');
+     if(rows.some(row=>normalize(row).active))result[i]=company;
+    }catch(err){
+     failures++;
+     console.warn('Não foi possível confirmar funcionários ativos na empresa '+company.code+': '+err.message);
+    }
+   }
+  }
+  await Promise.all(Array.from({length:Math.min(6,catalog.length)},()=>worker()));
+  if(catalog.length&&failures===catalog.length)throw Object.assign(Error('Não foi possível validar empresas no Alterdata. Tente novamente.'),{status:503});
+  const items=result.filter(Boolean);
+  activeCompaniesCache={items,expires:Date.now()+(failures?15000:60000)};
+  return items;
+ })();
+ try{return await activeCompaniesPending;}finally{activeCompaniesPending=null;}
+}
+module.exports={companies,activeCompanies,employees,normalize,findActive,findActiveByCpf};
