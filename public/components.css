@@ -119,8 +119,8 @@
 
 /* Campo de senha com ação de visibilidade acessível. */
 .password-control{position:relative;display:flex;align-items:center;min-width:0}
-.password-control>input{width:100%;padding-right:103px!important}
-.password-toggle{position:absolute;right:7px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:5px;border:0;border-radius:7px;background:transparent;padding:8px 9px;font-size:12px;font-weight:700;color:#005b28;white-space:nowrap}
+.password-control>input{width:100%;padding-right:48px!important;font-weight:400}
+.password-toggle{position:absolute;right:7px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;min-width:32px;min-height:32px;box-sizing:border-box;border:0;border-radius:7px;background:#e6f2e9;padding:0;color:#005b28;box-shadow:none;cursor:pointer}
 .password-toggle:hover,.password-toggle:focus-visible{background:#e6f2e9;outline-offset:1px}
 .password-eye{font-size:15px;line-height:1}
 
@@ -757,3 +757,6 @@ th[aria-sort="ascending"] .ticket-sort-indicator,th[aria-sort="descending"] .tic
 @media(min-width:761px) and (max-width:1000px){
  .main>.new-ticket-card,.main>.invite-card{width:100%;max-width:100%;min-width:0}
 }
+
+.password-toggle .password-eye{display:block;width:18px;height:18px;flex:none;pointer-events:none}
+.password-toggle:hover{background:#d6e9df;transform:translateY(-50%)}
