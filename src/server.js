@@ -37,7 +37,9 @@ const inviteThrottle=rateLimit({windowMs:15*60000,limit:12,standardHeaders:'draf
  keyGenerator:req=>'admin:'+String(req.user.id),
  message:{erro:'Limite de 12 convites por administrador em 15 minutos. Aguarde e tente novamente.'}});
 app.get('/api/health',safe(async(req,res)=>{await pool.query('SELECT 1');res.json({ok:true});}));
-app.get('/api/public/companies',lookupThrottle,safe(async(req,res)=>res.json(await alter.companies())));
+app.get('/api/public/companies',lookupThrottle,safe(async(req,res)=>res.json(await alter.activeCompanies())));
+// Catálogo completo somente para usuários autenticados, para preservar nomes históricos.
+app.get('/api/companies/catalog',auth,safe(async(req,res)=>res.json(await alter.companies())));
 app.get('/api/public/identify',throttle,safe(async(req,res)=>{
  const company=String(req.query.company||'').trim(),cpf=String(req.query.cpf||'').replace(/\D/g,'');
  if(!/^\d{11}$/.test(cpf))return res.status(400).json({erro:'CPF inválido'});
@@ -499,6 +501,7 @@ app.post('/api/admin/invite',auth,admin,inviteThrottle,safe(async(req,res)=>{
  const role=String(req.body?.role||'ANALISTA');
  if(!['ANALISTA','COLABORADOR'].includes(role))return res.status(400).json({erro:'Perfil inválido'});
  if(!/^\S+@\S+\.\S+$/.test(email)||email.length>254)return res.status(400).json({erro:'E-mail inválido'});
+ if(!(await alter.companies()).some(c=>c.code===company))return res.status(400).json({erro:'Empresa inválida'});
  const employee=await alter.findActive(company,eid,String(req.body?.employeeName||'').trim());
  if(!employee)return res.status(400).json({erro:'Funcionário ativo não localizado'});
  const existing=await pool.query('SELECT id,email,role FROM usuarios WHERE company_code=$1 AND employee_id=$2',[company,eid]);
