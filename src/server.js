@@ -600,15 +600,5 @@ function startReminderScheduler(){
  startup.unref?.();interval.unref?.();
  console.log('Lembretes 24h/48h ativos (verificação a cada 15 minutos)');
 }
-async function start(){const c=await pool.connect();try{
- await c.query(fs.readFileSync(path.join(__dirname,'schema.sql'),'utf8'));
- // Execução pontual, autorizada para remover registros anteriores a 24/11.
- // Depende de confirmação transacional e backup dentro da própria rotina.
- require('child_process').execFileSync(process.execPath,[path.join(__dirname,'../scripts/limpar-homologacao-20261124.js'),'--execute'],{stdio:'inherit',timeout:120000});
- // Verificação pós-limpeza de homologação sem expor dados de usuários.
- const status=await c.query("SELECT (SELECT count(*)::int FROM chamados WHERE created_at < TIMESTAMPTZ '2026-11-24 00:00:00-03:00') AS antigos, to_regclass('homologacao_backup_20261124.chamados') IS NOT NULL AS backup");
- let backupCount=null;
- if(status.rows[0].backup)backupCount=(await c.query("SELECT count(*)::int AS n FROM homologacao_backup_20261124.chamados")).rows[0].n;
- console.log('HOMOLOGACAO_VERIFICACAO',JSON.stringify({chamadosAnteriores24Nov:status.rows[0].antigos,backupCriado:status.rows[0].backup,backupChamados:backupCount}));
- }finally{c.release();}app.listen(process.env.PORT||3000,'0.0.0.0',()=>console.log('Chamados TI iniciado'));startReminderScheduler();}
+async function start(){const c=await pool.connect();try{await c.query(fs.readFileSync(path.join(__dirname,'schema.sql'),'utf8'));}finally{c.release();}app.listen(process.env.PORT||3000,'0.0.0.0',()=>console.log('Chamados TI iniciado'));startReminderScheduler();}
 start().catch(e=>{console.error('Falha na inicialização',e);process.exit(1)});
