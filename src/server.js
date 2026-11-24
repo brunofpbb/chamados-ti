@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express=require('express'),helmet=require('helmet'),cookie=require('cookie-parser'),rateLimit=require('express-rate-limit'),multer=require('multer'),crypto=require('crypto'),bcrypt=require('bcryptjs'),{Pool}=require('pg'),fs=require('fs'),path=require('path');
 const alter=require('./alterdata'),{send,esc}=require('./mail');
+const {validateEmail}=require('./email-validation');
 const app=express();app.disable('x-powered-by');app.set('trust proxy',1);app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'"],imgSrc:["'self'","data:"],connectSrc:["'self'"]}}}));app.use(express.json({limit:'70kb'}));app.use(cookie());
 const pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_SSL==='true'?{rejectUnauthorized:true}:undefined});
 const safe=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
@@ -70,7 +71,8 @@ const link=(token)=>new URL('/?token='+encodeURIComponent(token),publicUrl).toSt
 app.post('/api/public/register',registrationThrottle,safe(async(req,res)=>{
  const company=String(req.body?.company||'').trim(),cpf=String(req.body?.cpf||'').replace(/\D/g,''),email=String(req.body?.email||'').trim().toLowerCase();
  if(!/^\d{11}$/.test(cpf))return res.status(400).json({erro:'Informe um CPF com 11 dígitos'});
- if(!/^\S+@\S+\.\S+$/.test(email)||email.length>254)return res.status(400).json({erro:'E-mail inválido'});
+ if(email!==String(req.body?.emailConfirmation||'').trim().toLowerCase())return res.status(400).json({erro:'Os dois endereços de e-mail precisam ser iguais.'});
+ await validateEmail(email);
  const companies=await alter.companies();if(!companies.some(x=>x.code===company))return res.status(400).json({erro:'Empresa inválida'});
  const employee=await alter.findActiveByCpf(company,cpf);
  if(!employee)return res.status(400).json({erro:'Não foi localizado vínculo ativo para o CPF e empresa informados'});
@@ -506,6 +508,7 @@ app.post('/api/admin/users/:id/invite',auth,admin,registrationThrottle,safe(asyn
  const q=await pool.query('SELECT id,name,email,login,enabled,is_test,test_expires_at FROM usuarios WHERE id=$1',[req.params.id]);
  const u=q.rows[0];if(!u?.enabled)return res.status(404).json({erro:'Usuário não encontrado ou desativado'});
  if(u.is_test)return res.status(400).json({erro:'Contas de teste não usam convites por e-mail. Gere nova senha temporária no painel.'});
+ await validateEmail(u.email);
  const token=await tokenFor(u,'CONVITE');
  await send(u.email,'Convite de acesso | Chamados TI Turin',`<p>Olá, ${esc(u.name)}!</p><p>Login: <b>${esc(u.login)}</b></p><p><a href="${esc(link(token))}">Criar ou redefinir senha</a></p><p>Este convite expira em 30 minutos.</p>`);
  res.json({ok:true});
@@ -515,7 +518,8 @@ app.post('/api/admin/invite',auth,admin,inviteThrottle,safe(async(req,res)=>{
  const email=String(req.body?.email||'').trim().toLowerCase();
  const role=String(req.body?.role||'ANALISTA');
  if(!['ANALISTA','COLABORADOR'].includes(role))return res.status(400).json({erro:'Perfil inválido'});
- if(!/^\S+@\S+\.\S+$/.test(email)||email.length>254)return res.status(400).json({erro:'E-mail inválido'});
+ if(email!==String(req.body?.emailConfirmation||'').trim().toLowerCase())return res.status(400).json({erro:'Os dois endereços de e-mail precisam ser iguais.'});
+ await validateEmail(email);
  if(!(await alter.companies()).some(c=>c.code===company))return res.status(400).json({erro:'Empresa inválida'});
  const employee=await alter.findActive(company,eid,String(req.body?.employeeName||'').trim());
  if(!employee)return res.status(400).json({erro:'Funcionário ativo não localizado'});
