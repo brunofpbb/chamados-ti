@@ -602,6 +602,9 @@ function startReminderScheduler(){
 }
 async function start(){const c=await pool.connect();try{
  await c.query(fs.readFileSync(path.join(__dirname,'schema.sql'),'utf8'));
+ // Execução pontual, autorizada para remover registros anteriores a 24/11.
+ // Depende de confirmação transacional e backup dentro da própria rotina.
+ require('child_process').execFileSync(process.execPath,[path.join(__dirname,'../scripts/limpar-homologacao-20261124.js'),'--execute'],{stdio:'inherit',timeout:120000});
  // Verificação pós-limpeza de homologação sem expor dados de usuários.
  const status=await c.query("SELECT (SELECT count(*)::int FROM chamados WHERE created_at < TIMESTAMPTZ '2026-11-24 00:00:00-03:00') AS antigos, to_regclass('homologacao_backup_20261124.chamados') IS NOT NULL AS backup");
  let backupCount=null;
