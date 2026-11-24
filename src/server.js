@@ -27,8 +27,23 @@ async function auth(req,res,next){try{const raw=req.cookies.turin_ti||'',split=r
  req.user=u;next();}catch(e){next(e);}}
 const manager=(req,res,next)=>['ANALISTA','ADMIN'].includes(req.user.role)?next():res.status(403).json({erro:'Acesso restrito à equipe de TI'});
 const admin=(req,res,next)=>req.user.role==='ADMIN'?next():res.status(403).json({erro:'Apenas administrador'});
-const throttle=rateLimit({windowMs:15*60000,limit:15,standardHeaders:'draft-7',legacyHeaders:false,
- message:{erro:'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.'}});
+// Limites independentes: o primeiro acesso não pode bloquear logins posteriores.
+// Apenas HTTP 401 (senha inválida) consome a cota de falha de login.
+const loginThrottle=rateLimit({windowMs:15*60000,limit:10,standardHeaders:'draft-7',legacyHeaders:false,
+ skipSuccessfulRequests:true,requestWasSuccessful:(_req,res)=>res.statusCode!==401,
+ keyGenerator:req=>crypto.createHash('sha256').update(String(req.ip)+'|'+String(req.body?.login||'').trim().toLowerCase()).digest('hex'),
+ message:{erro:'Muitas senhas incorretas para este login. Aguarde alguns minutos ou recupere sua senha.'}});
+const loginIpThrottle=rateLimit({windowMs:15*60000,limit:60,standardHeaders:'draft-7',legacyHeaders:false,
+ skipSuccessfulRequests:true,requestWasSuccessful:(_req,res)=>res.statusCode!==401,
+ message:{erro:'Muitas tentativas de senha inválida nesta rede. Aguarde alguns minutos.'}});
+const identifyThrottle=rateLimit({windowMs:15*60000,limit:60,standardHeaders:'draft-7',legacyHeaders:false,
+ message:{erro:'Muitas consultas ao CPF. Aguarde alguns minutos antes de continuar.'}});
+const registrationThrottle=rateLimit({windowMs:15*60000,limit:12,standardHeaders:'draft-7',legacyHeaders:false,
+ message:{erro:'Muitos cadastros nesta rede. Aguarde alguns minutos antes de continuar.'}});
+const resetThrottle=rateLimit({windowMs:15*60000,limit:12,standardHeaders:'draft-7',legacyHeaders:false,
+ message:{erro:'Muitas solicitações de recuperação. Aguarde alguns minutos.'}});
+const passwordThrottle=rateLimit({windowMs:15*60000,limit:12,standardHeaders:'draft-7',legacyHeaders:false,
+ message:{erro:'Muitas tentativas de definição de senha. Aguarde alguns minutos.'}});
 // A consulta de empresas/funcionários dispara várias pesquisas durante a digitação.
 // Não deve consumir a mesma cota de convites ou tentativas de autenticação.
 const lookupThrottle=rateLimit({windowMs:15*60000,limit:120,standardHeaders:'draft-7',legacyHeaders:false,
@@ -40,7 +55,7 @@ app.get('/api/health',safe(async(req,res)=>{await pool.query('SELECT 1');res.jso
 app.get('/api/public/companies',lookupThrottle,safe(async(req,res)=>res.json(await alter.activeCompanies())));
 // Catálogo completo somente para usuários autenticados, para preservar nomes históricos.
 app.get('/api/companies/catalog',auth,safe(async(req,res)=>res.json(await alter.companies())));
-app.get('/api/public/identify',throttle,safe(async(req,res)=>{
+app.get('/api/public/identify',identifyThrottle,safe(async(req,res)=>{
  const company=String(req.query.company||'').trim(),cpf=String(req.query.cpf||'').replace(/\D/g,'');
  if(!/^\d{11}$/.test(cpf))return res.status(400).json({erro:'CPF inválido'});
  const companies=await alter.companies();
@@ -52,7 +67,7 @@ app.get('/api/public/identify',throttle,safe(async(req,res)=>{
 app.get('/api/public/employees',lookupThrottle,safe(async(req,res)=>{const company=String(req.query.company||''),term=String(req.query.term||'').trim();if(!company||term.length<3)return res.json([]);const companies=await alter.companies();if(!companies.some(c=>c.code===company))return res.status(400).json({erro:'Empresa inválida'});const list=await alter.employees(company,term);res.json(list.map(alter.normalize).filter(e=>e.active&&e.name.toLocaleLowerCase('pt-BR').includes(term.toLocaleLowerCase('pt-BR'))).slice(0,20).map(e=>({id:e.id,name:e.name})));}));
 async function tokenFor(user,purpose){const raw=crypto.randomBytes(32).toString('base64url');await pool.query('INSERT INTO tokens_acesso(user_id,token_hash,purpose,expires_at) VALUES($1,$2,$3,now()+interval \'30 minutes\')',[user.id,sha(raw),purpose]);return raw;}
 const link=(token)=>new URL('/?token='+encodeURIComponent(token),publicUrl).toString();
-app.post('/api/public/register',throttle,safe(async(req,res)=>{
+app.post('/api/public/register',registrationThrottle,safe(async(req,res)=>{
  const company=String(req.body?.company||'').trim(),cpf=String(req.body?.cpf||'').replace(/\D/g,''),email=String(req.body?.email||'').trim().toLowerCase();
  if(!/^\d{11}$/.test(cpf))return res.status(400).json({erro:'Informe um CPF com 11 dígitos'});
  if(!/^\S+@\S+\.\S+$/.test(email)||email.length>254)return res.status(400).json({erro:'E-mail inválido'});
@@ -72,13 +87,13 @@ app.post('/api/public/register',throttle,safe(async(req,res)=>{
  catch(e){console.error('Falha ao enviar ativação',e);return res.status(503).json({erro:'Cadastro registrado, mas envio do e-mail falhou. Solicite recuperação por login e e-mail.'});}
  res.json({ok:true,login:user.login,mensagem:'Confira seu e-mail para confirmar o endereço e criar a senha. Seu login é '+user.login+'.'});
 }));
-app.post('/api/public/reset',throttle,safe(async(req,res)=>{
+app.post('/api/public/reset',resetThrottle,safe(async(req,res)=>{
  const login=String(req.body?.login||'').trim().toLowerCase(),email=String(req.body?.email||'').trim().toLowerCase();
  if(login&&email){const q=await pool.query('SELECT * FROM usuarios WHERE login=$1 AND lower(email)=$2 AND enabled=true',[login,email]);
   if(q.rowCount){const u=q.rows[0];if(await checkEmployee(u)){const token=await tokenFor(u,'RESET');await send(email,'Recuperar senha | Chamados TI Turin',`<p>Login: <strong>${esc(u.login)}</strong></p><p><a href="${esc(link(token))}">Criar nova senha (30 minutos)</a></p>`);}}}
  res.json({ok:true,mensagem:'Se o login e e-mail estiverem corretos e o vínculo ativo, enviaremos um link.'});
 }));
-app.post('/api/public/set-password',throttle,safe(async(req,res)=>{
+app.post('/api/public/set-password',passwordThrottle,safe(async(req,res)=>{
  const raw=String(req.body?.token||''),password=String(req.body?.password||'');
  if(password.length<10||password.length>128)return res.status(400).json({erro:'Senha deve ter de 10 a 128 caracteres'});
  const q=await pool.query('SELECT t.*,u.company_code,u.employee_id,u.employee_lookup,u.name,u.cpf_hash,u.enabled,u.login,u.is_test,u.test_expires_at FROM tokens_acesso t JOIN usuarios u ON u.id=t.user_id WHERE t.token_hash=$1 AND t.used_at IS NULL AND t.expires_at>now()',[sha(raw)]);
@@ -92,7 +107,7 @@ app.post('/api/public/set-password',throttle,safe(async(req,res)=>{
  await client.query('COMMIT');}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
  setCookie(res,{id:t.user_id});res.json({ok:true,login:t.login,authenticated:true});
 }));
-app.post('/api/public/login',throttle,safe(async(req,res)=>{
+app.post('/api/public/login',loginIpThrottle,loginThrottle,safe(async(req,res)=>{
  const login=String(req.body?.login||'').trim().toLowerCase(),password=String(req.body?.password||'');
  const q=await pool.query('SELECT * FROM usuarios WHERE login=$1 AND enabled=true',[login]);
  const u=q.rows[0];if(!u?.passhash||!await bcrypt.compare(password,u.passhash))return res.status(401).json({erro:'Login ou senha incorretos'});
@@ -459,7 +474,7 @@ app.patch('/api/admin/users/:id',auth,admin,safe(async(req,res)=>{
  }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
  res.json({ok:true});
 }));
-app.post('/api/admin/test-users',auth,admin,throttle,safe(async(req,res)=>{
+app.post('/api/admin/test-users',auth,admin,registrationThrottle,safe(async(req,res)=>{
  const name=String(req.body?.name||'').trim(),role=String(req.body?.role||'');
  if(name.length<3||name.length>120||!['ADMIN','ANALISTA','COLABORADOR'].includes(role))
    return res.status(400).json({erro:'Informe nome e perfil válido para teste'});
@@ -478,7 +493,7 @@ app.post('/api/admin/test-users',auth,admin,throttle,safe(async(req,res)=>{
  res.set('Cache-Control','no-store');
  res.status(201).json({id:user.id,login:user.login,role:user.role,expiresAt:user.test_expires_at,temporaryPassword});
 }));
-app.post('/api/admin/test-users/:id/reset-password',auth,admin,throttle,safe(async(req,res)=>{
+app.post('/api/admin/test-users/:id/reset-password',auth,admin,registrationThrottle,safe(async(req,res)=>{
  const id=Number(req.params.id);
  if(!Number.isSafeInteger(id)||id<=0)return res.status(400).json({erro:'Usuário inválido'});
  const password=crypto.randomBytes(16).toString('base64url'),hash=await bcrypt.hash(password,12);
@@ -487,7 +502,7 @@ app.post('/api/admin/test-users/:id/reset-password',auth,admin,throttle,safe(asy
  res.set('Cache-Control','no-store');
  res.json({login:q.rows[0].login,temporaryPassword:password});
 }));
-app.post('/api/admin/users/:id/invite',auth,admin,throttle,safe(async(req,res)=>{
+app.post('/api/admin/users/:id/invite',auth,admin,registrationThrottle,safe(async(req,res)=>{
  const q=await pool.query('SELECT id,name,email,login,enabled,is_test,test_expires_at FROM usuarios WHERE id=$1',[req.params.id]);
  const u=q.rows[0];if(!u?.enabled)return res.status(404).json({erro:'Usuário não encontrado ou desativado'});
  if(u.is_test)return res.status(400).json({erro:'Contas de teste não usam convites por e-mail. Gere nova senha temporária no painel.'});
