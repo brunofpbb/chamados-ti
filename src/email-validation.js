@@ -7,6 +7,7 @@ function basicEmailError(email){
  const parts=email.split('@');
  if(parts.length!==2)return 'Informe um endereço de e-mail válido.';
  const [local,domain]=parts;
+ if(domain==='turintransportescom.br')return 'Confira o domínio: o correto é @turintransportes.com.br (com o ponto antes de com).';
  if(!local||local.length>64||!/^[a-z0-9.!#$%&'*+\/=?^_`{|}~-]+$/i.test(local)||local.startsWith('.')||local.endsWith('.')||local.includes('..'))return 'A parte anterior ao @ do e-mail é inválida.';
  if(!domain||domain.length>253||domain.endsWith('.')||domain.includes('..'))return 'O domínio do e-mail é inválido.';
  const labels=domain.split('.');
