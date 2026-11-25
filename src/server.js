@@ -273,10 +273,9 @@ app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{
  const assignee=req.body?.assigneeId===null?null:req.body?.assigneeId===undefined?t.assignee_id:Number(req.body.assigneeId);
  if(assignee!==null&&(!Number.isSafeInteger(assignee)||assignee<1))return res.status(400).json({erro:'Analista inválido'});
  if(!isManager&&(requestedStatus!=='CANCELADO'||!['ABERTO','EM_ATENDIMENTO','AGUARDANDO_USUARIO'].includes(t.status)))return res.status(403).json({erro:'Só é permitido cancelar chamado em andamento'});
- if(isManager&&assignee!==null){
-  const q=await pool.query("SELECT id FROM usuarios WHERE id=$1 AND role IN ('ANALISTA','ADMIN') AND enabled=true AND (is_test=false OR test_expires_at>now())",[assignee]);
-  if(!q.rowCount)return res.status(400).json({erro:'Analista inválido'});
- }
+ // A elegibilidade do responsável é validada somente se houver nova atribuição.
+ // Chamados já atribuídos continuam podendo ser resolvidos mesmo que o usuário
+ // original tenha sido desativado, mudado de perfil ou expirado como conta de teste.
  const client=await pool.connect();let nextStatus,oldStatus,changed=false;
  try{
   await client.query('BEGIN');
@@ -296,6 +295,10 @@ app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{
    }
   }
   const actualAssignee=isManager?requestedAssignee:current.assignee_id;
+  if(isManager&&actualAssignee!==null&&String(actualAssignee)!==String(current.assignee_id??'')){
+   const eligible=await client.query("SELECT id FROM usuarios WHERE id=$1 AND role IN ('ANALISTA','ADMIN') AND enabled=true AND (is_test=false OR test_expires_at>now())",[actualAssignee]);
+   if(!eligible.rowCount)throw Object.assign(new Error('O responsável selecionado não está ativo ou não possui perfil de analista/administrador. Selecione outro usuário.'),{status:400});
+  }
   nextStatus=requestedStatus;
   // Atribuir um chamado aberto assume o atendimento, sem sobrescrever outro status escolhido.
   const automaticallyAssumed=isManager&&oldStatus==='ABERTO'&&requestedStatus==='ABERTO'&&actualAssignee!==null&&String(actualAssignee)!==String(current.assignee_id);
