@@ -269,6 +269,7 @@ app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{
  const requestedStatus=String(req.body?.status||t.status);
  const resolutionSummary=String(req.body?.resolutionSummary??t.resolution_summary??'').trim();
  if(resolutionSummary.length>2000)return res.status(400).json({erro:'Solução deve ter até 2.000 caracteres'});
+ if(requestedStatus==='RESOLVIDO'&&!resolutionSummary)return res.status(400).json({erro:'Descreva a solução aplicada antes de resolver o chamado.'});
  if(!statuses.includes(requestedStatus))return res.status(400).json({erro:'Status inválido'});
  // O PostgreSQL retorna BIGINT como string (por exemplo, "15").
  // Validamos números enviados em novas atribuições, mas não rejeitamos IDs
@@ -303,6 +304,7 @@ app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{
    const eligible=await client.query("SELECT id FROM usuarios WHERE id=$1 AND role IN ('ANALISTA','ADMIN') AND enabled=true AND (is_test=false OR test_expires_at>now())",[actualAssignee]);
    if(!eligible.rowCount)throw Object.assign(new Error('O responsável selecionado não está ativo ou não possui perfil de analista/administrador. Selecione outro usuário.'),{status:400});
   }
+  if(requestedStatus==='RESOLVIDO'&&!resolutionSummary)throw Object.assign(new Error('Descreva a solução aplicada antes de resolver o chamado.'),{status:400});
   nextStatus=requestedStatus;
   // Atribuir um chamado aberto assume o atendimento, sem sobrescrever outro status escolhido.
   const automaticallyAssumed=isManager&&oldStatus==='ABERTO'&&requestedStatus==='ABERTO'&&actualAssignee!==null&&String(actualAssignee)!==String(current.assignee_id);
