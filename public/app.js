@@ -307,7 +307,49 @@ function bind(){
  root.querySelectorAll('.user-reset-test').forEach(b=>b.onclick=async()=>{if(!confirm('Gerar nova senha para este usuário de teste? A senha anterior deixará de funcionar.'))return;try{const u=await api('/admin/test-users/'+b.dataset.userId+'/reset-password',{method:'POST'});testCredentials={login:u.login,password:u.temporaryPassword};render();alertMsg('Nova senha gerada. Copie as credenciais.');}catch(e){alertMsg(e.message,true);}});
 
  root.querySelectorAll('.user-save').forEach(b=>b.onclick=async()=>{const id=b.dataset.userId,row=b.closest('.user-row');const role=row.querySelector('.user-role').value,enabled=row.querySelector('.user-active').checked;if(!confirm('Salvar as alterações de acesso deste usuário?'))return;try{await api('/admin/users/'+id,{method:'PATCH',body:{role,enabled}});users=await api('/admin/users');alertMsg('Permissões atualizadas.');}catch(e){alertMsg(e.message,true);}});
- root.querySelectorAll('.user-invite').forEach(b=>b.onclick=async()=>{if(!confirm('Enviar convite de acesso para o e-mail cadastrado?'))return;try{await api('/admin/users/'+b.dataset.userId+'/invite',{method:'POST'});alertMsg('Convite enviado por e-mail.');}catch(e){alertMsg(e.message,true);}});
+ const editEmailDialog=document.getElementById('editUserEmailDialog');
+ const editEmailForm=document.getElementById('editUserEmailForm');
+ const cancelEmail=document.getElementById('cancelEditUserEmail');
+ if(cancelEmail)cancelEmail.onclick=()=>editEmailDialog?.close();
+ root.querySelectorAll('.user-edit-email').forEach(b=>b.onclick=()=>{
+  const user=users.find(u=>String(u.id)===String(b.dataset.userId));
+  if(!user||!editEmailDialog||!editEmailForm)return;
+  editEmailForm.reset();
+  editEmailForm.dataset.userId=String(user.id);
+  document.getElementById('editUserEmailName').textContent=user.name+' · '+user.login;
+  document.getElementById('editUserEmail').value=user.email;
+  editEmailDialog.showModal();
+ });
+ if(editEmailForm)editEmailForm.onsubmit=async event=>{
+  event.preventDefault();
+  const data=new FormData(editEmailForm);
+  const email=String(data.get('email')||'').trim().toLowerCase();
+  const confirmation=String(data.get('emailConfirmation')||'').trim().toLowerCase();
+  if(email!==confirmation){alertMsg('Os endereços de e-mail não coincidem.',true);return;}
+  if(!confirm('Confirmar a atualização do e-mail deste usuário? As próximas notificações e redefinições serão enviadas ao novo endereço.'))return;
+  const submit=editEmailForm.querySelector('[type="submit"]');
+  if(submit.disabled)return;
+  submit.disabled=true;
+  try{
+   await api('/users/'+editEmailForm.dataset.userId+'/email',{method:'PATCH',body:{email,emailConfirmation:confirmation}});
+   users=await api('/admin/users');
+   editEmailDialog.close();
+   render();
+   alertMsg('E-mail atualizado com sucesso.');
+  }catch(e){alertMsg(e.message,true);}
+  finally{if(submit.isConnected)submit.disabled=false;}
+ };
+ root.querySelectorAll('.user-reset-email').forEach(b=>b.onclick=async()=>{
+  const user=users.find(u=>String(u.id)===String(b.dataset.userId));
+  if(!user)return;
+  if(!confirm('Enviar link de redefinição de senha para '+user.email+'? O link expira em 30 minutos.'))return;
+  b.disabled=true;
+  try{
+   await api('/users/'+user.id+'/password-reset',{method:'POST'});
+   alertMsg('E-mail de redefinição enviado para '+user.email+'.');
+  }catch(e){alertMsg(e.message,true);}
+  finally{if(b.isConnected)b.disabled=false;}
+ });
  const logout=document.getElementById('logout');if(logout)logout.onclick=async()=>{await api('/logout',{method:'POST'});me=null;companies=[];activeCompanies=[];companyLoadVersion++;testCredentials=null;view='home';render();};const search=document.getElementById('search');if(search)search.oninput=()=>{filter=search.value;const p=search.selectionStart;render();const n=document.getElementById('search');n.focus();n.setSelectionRange(p,p);};root.querySelectorAll('[data-metric-status]').forEach(b=>b.onclick=()=>{statusFilter=b.dataset.metricStatus==='ATIVOS'?['EM_ATENDIMENTO','AGUARDANDO_USUARIO']:b.dataset.metricStatus?[b.dataset.metricStatus]:[];filter='';message='';view='tickets';render();});const refreshList=()=>{
   const searchValue=document.getElementById('search')?.value??filter;
   const selection=document.getElementById('search');
