@@ -462,9 +462,59 @@ app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
 
 /* Administração: usuários vinculados ao RH e contas temporárias de teste.
    Nunca existe cadastro público ou senha padrão de administrador. */
-app.get('/api/admin/users',auth,admin,safe(async(req,res)=>{
+app.get('/api/admin/users',auth,manager,safe(async(req,res)=>{
  const r=await pool.query("SELECT id,login,name,email,company_code,role,enabled,is_test,test_expires_at,created_at,(passhash IS NOT NULL) AS activated FROM usuarios ORDER BY name,id");
  res.json(r.rows);
+}));
+// E-mail de colaborador: operação de suporte disponível a analistas e administradores.
+// Nunca permite a um analista alterar credenciais de outro analista ou administrador.
+app.patch('/api/users/:id/email',auth,manager,safe(async(req,res)=>{
+ const id=Number(req.params.id),email=String(req.body?.email||'').trim().toLowerCase();
+ const confirmation=String(req.body?.emailConfirmation||'').trim().toLowerCase();
+ if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({erro:'Usuário inválido'});
+ if(email!==confirmation)return res.status(400).json({erro:'Os e-mails informados não coincidem'});
+ const target=await pool.query('SELECT id,name,email,role,enabled,is_test FROM usuarios WHERE id=$1',[id]);
+ const u=target.rows[0];
+ if(!u)return res.status(404).json({erro:'Usuário não localizado'});
+ if(u.is_test)return res.status(400).json({erro:'Contas de teste não utilizam e-mail'});
+ if(req.user.role!=='ADMIN'&&u.role!=='COLABORADOR')return res.status(403).json({erro:'Somente um administrador pode alterar o e-mail de analistas e administradores'});
+ if(!u.enabled)return res.status(409).json({erro:'Ative a conta antes de alterar o e-mail'});
+ const valid=await validateEmail(email);
+ if(u.email.toLowerCase()===valid)return res.json({ok:true,unchanged:true,email:valid});
+ const previous=u.email;
+ // Revalidar perfil sob bloqueio: evita mudança simultânea de perfil.
+ const client=await pool.connect();
+ try{
+  await client.query('BEGIN');
+  const locked=await client.query('SELECT role,is_test,enabled,email FROM usuarios WHERE id=$1 FOR UPDATE',[id]);
+  if(!locked.rowCount||locked.rows[0].is_test||!locked.rows[0].enabled||
+    (req.user.role!=='ADMIN'&&locked.rows[0].role!=='COLABORADOR')){
+   throw Object.assign(new Error('Usuário não elegível para alteração de e-mail'),{status:403});
+  }
+  await client.query('UPDATE usuarios SET email=$1 WHERE id=$2',[valid,id]);
+  await client.query('COMMIT');
+ }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+ // Mensagem de ciência ao e-mail anterior quando estiver configurado.
+ if(previous&&previous.toLowerCase()!==valid){
+  send(previous,'Alteração de e-mail | Chamados TI Turin',
+   `<p>O endereço de e-mail associado ao login <strong>${esc(u.name)}</strong> foi atualizado pela equipe de TI.</p><p>Se não reconhece a alteração, entre em contato com a TI.</p>`).catch(err=>console.error('Aviso ao endereço anterior não enviado:',err.message));
+ }
+ res.json({ok:true,email:valid});
+}));
+app.post('/api/users/:id/password-reset',auth,manager,registrationThrottle,safe(async(req,res)=>{
+ const id=Number(req.params.id);
+ if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({erro:'Usuário inválido'});
+ const q=await pool.query('SELECT id,name,email,login,role,enabled,is_test FROM usuarios WHERE id=$1',[id]);
+ const u=q.rows[0];
+ if(!u)return res.status(404).json({erro:'Usuário não localizado'});
+ if(!u.enabled)return res.status(409).json({erro:'Conta desativada'});
+ if(u.is_test)return res.status(400).json({erro:'Contas de teste utilizam a função de senha temporária do administrador'});
+ if(req.user.role!=='ADMIN'&&u.role!=='COLABORADOR')return res.status(403).json({erro:'Somente administradores podem redefinir o acesso de outros membros da TI'});
+ await validateEmail(u.email);
+ const token=await tokenFor(u,'RESET');
+ await send(u.email,'Redefinir senha | Chamados TI Turin',
+  `<p>Olá, ${esc(u.name)}!</p><p>A equipe de TI solicitou a redefinição da senha da sua conta.</p><p><strong>Login:</strong> ${esc(u.login)}</p><p><a href="${esc(link(token))}">Criar nova senha</a></p><p>Este link é válido por 30 minutos. Se não solicitou, entre em contato com a TI.</p>`);
+ res.json({ok:true});
 }));
 app.patch('/api/admin/users/:id',auth,admin,safe(async(req,res)=>{
  const id=Number(req.params.id),role=String(req.body?.role||''),enabled=req.body?.enabled;
