@@ -270,8 +270,13 @@ app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{
  const resolutionSummary=String(req.body?.resolutionSummary??t.resolution_summary??'').trim();
  if(resolutionSummary.length>2000)return res.status(400).json({erro:'Solução deve ter até 2.000 caracteres'});
  if(!statuses.includes(requestedStatus))return res.status(400).json({erro:'Status inválido'});
- const assignee=req.body?.assigneeId===null?null:req.body?.assigneeId===undefined?t.assignee_id:Number(req.body.assigneeId);
- if(assignee!==null&&(!Number.isSafeInteger(assignee)||assignee<1))return res.status(400).json({erro:'Analista inválido'});
+ // O PostgreSQL retorna BIGINT como string (por exemplo, "15").
+ // Validamos números enviados em novas atribuições, mas não rejeitamos IDs
+ // existentes somente porque chegaram como texto do banco.
+ const assigneeProvided=Object.prototype.hasOwnProperty.call(req.body||{},'assigneeId');
+ const assignee=assigneeProvided?(req.body.assigneeId===null?null:Number(req.body.assigneeId)):t.assignee_id;
+ if(assigneeProvided&&assignee!==null&&(!Number.isSafeInteger(assignee)||assignee<1))
+  return res.status(400).json({erro:'ID do responsável inválido'});
  if(!isManager&&(requestedStatus!=='CANCELADO'||!['ABERTO','EM_ATENDIMENTO','AGUARDANDO_USUARIO'].includes(t.status)))return res.status(403).json({erro:'Só é permitido cancelar chamado em andamento'});
  // A elegibilidade do responsável é validada somente se houver nova atribuição.
  // Chamados já atribuídos continuam podendo ser resolvidos mesmo que o usuário
@@ -287,8 +292,7 @@ app.patch('/api/tickets/:id',auth,ticketAccess,safe(async(req,res)=>{
   // Analistas podem assumir um chamado sem responsável, mas nunca atribuir
   // a terceiros, remover ou trocar um responsável já designado.
   // A checagem acontece sob FOR UPDATE para impedir corridas entre analistas.
-  const assigneeWasProvided=Object.prototype.hasOwnProperty.call(req.body||{},'assigneeId');
-  const requestedAssignee=assigneeWasProvided?assignee:current.assignee_id;
+  const requestedAssignee=assigneeProvided?assignee:current.assignee_id;
   if(req.user.role==='ANALISTA' && String(requestedAssignee??'')!==String(current.assignee_id??'')){
    if(current.assignee_id!==null || String(requestedAssignee)!==String(req.user.id)){
     throw Object.assign(new Error('Apenas administradores podem atribuir ou trocar o responsável de outro analista. Você só pode assumir chamados sem responsável.'),{status:403});
