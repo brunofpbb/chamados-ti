@@ -370,7 +370,7 @@ app.post('/api/tickets/:id/review',auth,ticketAccess,safe(async(req,res)=>{
  res.status(201).json({ok:true});
 }));
 app.get('/api/analysts',auth,manager,safe(async(req,res)=>{const q=await pool.query("SELECT id,name,company_code,email,role FROM usuarios WHERE role IN ('ANALISTA','ADMIN') AND enabled=true ORDER BY name");res.json(q.rows);}));
-app.get('/api/dashboard',auth,admin,safe(async(req,res)=>{
+app.get('/api/dashboard',auth,manager,safe(async(req,res)=>{
  const options={'7':7,'30':30,'90':90,'365':365,'all':null};
  const period=String(req.query.period||'30');
  if(!Object.hasOwn(options,period))return res.status(400).json({erro:'Período inválido'});
